@@ -1,6 +1,6 @@
 import os
 import secrets
-from flask import Flask, request, redirect, url_for, render_template_string, send_from_directory, jsonify
+from flask import Flask, request, redirect, url_for, render_template_string, send_from_directory, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import (
     LoginManager,
