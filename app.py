@@ -1,7 +1,6 @@
 import os
 import secrets
-from flask import Flask, request, redirect, url_for, render_template_string, send_from_directory, jsonify, session
-
+from flask import Flask, request, redirect, url_for, render_template_string, send_from_directory, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import (
     LoginManager,
@@ -24,12 +23,7 @@ UPLOAD_FOLDER = os.path.join(_BASE_DIR, 'uploads')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
-# استبدل السطر القديم بهذا الكود:
-database_url = os.environ.get("DATABASE_URL")
-if database_url and database_url.startswith("postgres://"):
-    database_url = database_url.replace("postgres://", "postgresql://", 1)
-
-app.config["SQLALCHEMY_DATABASE_URI"] = database_url or "sqlite:///" + os.path.join(_BASE_DIR, "insta_classic_v5.db")
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(_BASE_DIR, "insta_classic_v5.db")
 
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
@@ -442,7 +436,7 @@ def settings():
 # ADMIN DASHBOARD
 # ==============================
 
-ADMIN_PASSWORD = "e3wg911"  # ← غيّر هذا لكلمة سر قوية!
+ADMIN_PASSWORD = "admin1234"  # ← غيّر هذا لكلمة سر قوية!
 
 def admin_required(f):
     from functools import wraps
