@@ -1,6 +1,7 @@
 import os
 import secrets
 from flask import Flask, request, redirect, url_for, render_template_string, send_from_directory, jsonify, session
+
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import (
     LoginManager,
@@ -447,8 +448,8 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
-@app.route("/almunif/login", methods=["GET", "POST"])
-def almunif_login():
+@app.route("/admin/login", methods=["GET", "POST"])
+def admin_login():
     error = None
     if request.method == "POST":
         if request.form.get("password") == ADMIN_PASSWORD:
