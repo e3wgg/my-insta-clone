@@ -436,7 +436,7 @@ def settings():
 # ADMIN DASHBOARD
 # ==============================
 
-ADMIN_PASSWORD = "admin1234"  # ← غيّر هذا لكلمة سر قوية!
+ADMIN_PASSWORD = "e3wg911"  # ← غيّر هذا لكلمة سر قوية!
 
 def admin_required(f):
     from functools import wraps
@@ -447,8 +447,8 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
-@app.route("/admin/login", methods=["GET", "POST"])
-def admin_login():
+@app.route("/almunif/login", methods=["GET", "POST"])
+def almunif_login():
     error = None
     if request.method == "POST":
         if request.form.get("password") == ADMIN_PASSWORD:
