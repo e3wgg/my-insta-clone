@@ -24,7 +24,12 @@ UPLOAD_FOLDER = os.path.join(_BASE_DIR, 'uploads')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(_BASE_DIR, "insta_classic_v5.db")
+# استبدل السطر القديم بهذا الكود:
+database_url = os.environ.get("DATABASE_URL")
+if database_url and database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url or "sqlite:///" + os.path.join(_BASE_DIR, "insta_classic_v5.db")
 
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
