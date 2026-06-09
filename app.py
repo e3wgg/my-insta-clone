@@ -1,6 +1,6 @@
 import os
 import secrets
-from flask import Flask, request, redirect, url_for, render_template_string, send_from_directory, jsonify
+from flask import Flask, request, redirect, url_for, render_template_string, send_from_directory, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import (
     LoginManager,
@@ -58,6 +58,8 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(150), nullable=True)
     email_verified = db.Column(db.Boolean, default=False)
     verify_token = db.Column(db.String(64), nullable=True)
+    is_banned = db.Column(db.Boolean, default=False)
+    is_admin = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     followed = db.relationship(
@@ -427,6 +429,366 @@ def settings():
     </body>
     </html>
     """, current_user=current_user)
+
+
+
+# ==============================
+# ADMIN DASHBOARD
+# ==============================
+
+ADMIN_PASSWORD = "admin1234"  # ← غيّر هذا لكلمة سر قوية!
+
+def admin_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('admin_logged_in'):
+            return redirect(url_for('admin_login'))
+        return f(*args, **kwargs)
+    return decorated
+
+@app.route("/admin/login", methods=["GET", "POST"])
+def admin_login():
+    error = None
+    if request.method == "POST":
+        if request.form.get("password") == ADMIN_PASSWORD:
+            session['admin_logged_in'] = True
+            return redirect(url_for('admin_dashboard'))
+        error = "Wrong password"
+    return render_template_string("""
+    <!DOCTYPE html><html><head><meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Admin Login</title>
+    <style>
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{background:#1a1a2e;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:-apple-system,sans-serif}
+        .card{background:#16213e;border:1px solid #0f3460;border-radius:12px;padding:40px 32px;width:320px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.4)}
+        .logo{font-size:32px;margin-bottom:6px}
+        h2{color:#e94560;font-size:18px;margin-bottom:4px}
+        p{color:#888;font-size:12px;margin-bottom:24px}
+        input{width:100%;padding:12px;border-radius:6px;border:1px solid #0f3460;background:#1a1a2e;color:#fff;font-size:14px;margin-bottom:12px;outline:none}
+        input:focus{border-color:#e94560}
+        button{width:100%;padding:12px;background:#e94560;color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer}
+        button:hover{background:#c73652}
+        .err{background:#3d0015;border:1px solid #e94560;color:#ff6b8a;padding:8px 12px;border-radius:6px;font-size:12px;margin-bottom:12px}
+    </style></head><body>
+    <div class="card">
+        <div class="logo">🛡️</div>
+        <h2>Admin Panel</h2>
+        <p>Instagram Classic Dashboard</p>
+        {% if error %}<div class="err">⚠️ {{ error }}</div>{% endif %}
+        <form method="post">
+            <input type="password" name="password" placeholder="Admin Password" autofocus required>
+            <button type="submit">Enter Dashboard</button>
+        </form>
+    </div>
+    </body></html>
+    """, error=error)
+
+@app.route("/admin/logout")
+def admin_logout():
+    session.pop('admin_logged_in', None)
+    return redirect(url_for('admin_login'))
+
+@app.route("/admin")
+@admin_required
+def admin_dashboard():
+    search = request.args.get('q', '').strip()
+    if search:
+        users = User.query.filter(User.username.ilike(f'%{search}%')).order_by(User.created_at.desc()).all()
+    else:
+        users = User.query.order_by(User.created_at.desc()).all()
+
+    total_users = User.query.count()
+    total_posts = Post.query.count()
+    banned_count = User.query.filter_by(is_banned=True).count()
+
+    return render_template_string("""
+    <!DOCTYPE html><html><head><meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Admin Dashboard</title>
+    <style>
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{background:#f0f2f5;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#333}
+        .topbar{background:linear-gradient(135deg,#1a1a2e,#16213e);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.3)}
+        .topbar h1{color:#fff;font-size:18px;font-weight:700}
+        .topbar a{color:#aaa;font-size:13px;text-decoration:none;padding:6px 14px;border:1px solid #444;border-radius:4px}
+        .topbar a:hover{color:#fff;border-color:#e94560}
+        .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:20px 24px 0}
+        .stat{background:#fff;border-radius:10px;padding:20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.08)}
+        .stat-num{font-size:32px;font-weight:800;color:#1a1a2e}
+        .stat-lbl{font-size:12px;color:#888;margin-top:4px;text-transform:uppercase;letter-spacing:0.05em}
+        .stat.red .stat-num{color:#e94560}
+        .section{padding:20px 24px}
+        .section-title{font-size:13px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:12px}
+        .search-bar{display:flex;gap:8px;margin-bottom:16px}
+        .search-bar input{flex:1;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-size:13px;outline:none}
+        .search-bar input:focus{border-color:#4a8db7}
+        .search-bar button{padding:10px 16px;background:#4a8db7;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
+        table{width:100%;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08);border-collapse:collapse;overflow:hidden}
+        th{background:#f8f9fa;padding:12px 14px;text-align:left;font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #eee}
+        td{padding:12px 14px;font-size:13px;border-bottom:1px solid #f5f5f5;vertical-align:middle}
+        tr:last-child td{border-bottom:none}
+        tr:hover td{background:#fafafa}
+        .avatar{width:34px;height:34px;border-radius:50%;object-fit:cover;border:1px solid #ddd}
+        .avatar-placeholder{width:34px;height:34px;border-radius:50%;background:#dde;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#556}
+        .badge-ban{background:#fff0f0;color:#e94560;border:1px solid #ffc0c0;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
+        .badge-ok{background:#f0fff4;color:#27ae60;border:1px solid #b2dfdb;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
+        .badge-admin{background:#fff8e1;color:#f39c12;border:1px solid #ffe082;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;margin-left:4px}
+        .btn{display:inline-block;padding:5px 10px;border-radius:4px;font-size:11px;font-weight:700;text-decoration:none;cursor:pointer;border:none;margin:1px}
+        .btn-red{background:#e94560;color:#fff}
+        .btn-red:hover{background:#c73652}
+        .btn-orange{background:#e67e22;color:#fff}
+        .btn-orange:hover{background:#ca6f1e}
+        .btn-green{background:#27ae60;color:#fff}
+        .btn-green:hover{background:#1e8449}
+        .btn-blue{background:#4a8db7;color:#fff}
+        .btn-blue:hover{background:#2a6a96}
+        .btn-gray{background:#95a5a6;color:#fff}
+        .btn-gray:hover{background:#7f8c8d}
+        .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;align-items:center;justify-content:center}
+        .modal-overlay.active{display:flex}
+        .modal{background:#fff;border-radius:12px;padding:28px 24px;width:340px;box-shadow:0 8px 32px rgba(0,0,0,0.2)}
+        .modal h3{font-size:16px;font-weight:700;margin-bottom:8px;color:#1a1a2e}
+        .modal p{font-size:13px;color:#666;margin-bottom:20px}
+        .modal input{width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:13px;margin-bottom:12px;outline:none}
+        .modal input:focus{border-color:#4a8db7}
+        .modal-btns{display:flex;gap:8px}
+        .modal-btns button{flex:1;padding:10px;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
+        .btn-confirm{background:#e94560;color:#fff}
+        .btn-cancel{background:#eee;color:#555}
+        .posts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px;margin-top:12px}
+        .post-thumb{position:relative;aspect-ratio:1;border-radius:6px;overflow:hidden;background:#ddd}
+        .post-thumb img{width:100%;height:100%;object-fit:cover}
+        .post-thumb .del-btn{position:absolute;top:4px;right:4px;background:rgba(233,69,96,0.9);color:#fff;border:none;border-radius:4px;padding:2px 6px;font-size:10px;font-weight:700;cursor:pointer}
+    </style></head><body>
+
+    <!-- Top Bar -->
+    <div class="topbar">
+        <h1>🛡️ Admin Dashboard</h1>
+        <a href="/admin/logout">Logout</a>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats">
+        <div class="stat">
+            <div class="stat-num">{{ total_users }}</div>
+            <div class="stat-lbl">Total Users</div>
+        </div>
+        <div class="stat">
+            <div class="stat-num">{{ total_posts }}</div>
+            <div class="stat-lbl">Total Posts</div>
+        </div>
+        <div class="stat red">
+            <div class="stat-num">{{ banned_count }}</div>
+            <div class="stat-lbl">Banned</div>
+        </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="section">
+        <div class="section-title">Users Management</div>
+        <form class="search-bar" method="get">
+            <input name="q" value="{{ search }}" placeholder="Search by username..." autocomplete="off">
+            <button type="submit">Search</button>
+        </form>
+        <table>
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Email</th>
+                    <th>Posts</th>
+                    <th>Joined</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for u in users %}
+                <tr>
+                    <td>
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            {% if u.avatar_filename %}
+                                <img src="/uploads/{{ u.avatar_filename }}" class="avatar">
+                            {% else %}
+                                <div class="avatar-placeholder">{{ u.username[:2].upper() }}</div>
+                            {% endif %}
+                            <div>
+                                <div style="font-weight:700;">@{{ u.username }}</div>
+                                {% if u.bio %}<div style="font-size:11px;color:#999;">{{ u.bio[:30] }}</div>{% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td style="color:#888;font-size:12px;">{{ u.email or '—' }}</td>
+                    <td style="font-weight:700;">{{ u.posts|length }}</td>
+                    <td style="color:#aaa;font-size:12px;">{{ u.created_at.strftime('%Y-%m-%d') }}</td>
+                    <td>
+                        {% if u.is_banned %}
+                            <span class="badge-ban">Banned</span>
+                        {% else %}
+                            <span class="badge-ok">Active</span>
+                        {% endif %}
+                        {% if u.is_admin %}<span class="badge-admin">Admin</span>{% endif %}
+                    </td>
+                    <td>
+                        <!-- Ban / Unban -->
+                        {% if u.is_banned %}
+                            <a href="/admin/unban/{{ u.id }}" class="btn btn-green" onclick="return confirm('Unban @{{ u.username }}?')">Unban</a>
+                        {% else %}
+                            <a href="/admin/ban/{{ u.id }}" class="btn btn-orange" onclick="return confirm('Ban @{{ u.username }}?')">Ban</a>
+                        {% endif %}
+                        <!-- Reset Password -->
+                        <button class="btn btn-blue" onclick="openReset({{ u.id }}, '{{ u.username }}')">Reset PW</button>
+                        <!-- View Posts -->
+                        <button class="btn btn-gray" onclick="openPosts({{ u.id }}, '{{ u.username }}')">Posts</button>
+                        <!-- Delete Account -->
+                        <a href="/admin/delete-user/{{ u.id }}" class="btn btn-red" onclick="return confirm('DELETE @{{ u.username }}? This cannot be undone!')">Delete</a>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Reset Password Modal -->
+    <div class="modal-overlay" id="resetModal">
+        <div class="modal">
+            <h3>🔑 Reset Password</h3>
+            <p id="resetLabel">Set new password for user</p>
+            <form id="resetForm" method="post">
+                <input type="password" name="new_password" id="newPwInput" placeholder="New password..." required minlength="6">
+                <div class="modal-btns">
+                    <button type="button" class="btn-cancel" onclick="closeModal('resetModal')">Cancel</button>
+                    <button type="submit" class="btn-confirm">Reset</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Posts Modal -->
+    <div class="modal-overlay" id="postsModal">
+        <div class="modal" style="width:480px;max-width:95vw;">
+            <h3>📸 Posts</h3>
+            <p id="postsLabel">Loading...</p>
+            <div class="posts-grid" id="postsGrid"></div>
+            <div style="margin-top:16px;text-align:right;">
+                <button class="btn-cancel" style="padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-weight:700;" onclick="closeModal('postsModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openReset(uid, uname) {
+            document.getElementById('resetLabel').textContent = 'Set new password for @' + uname;
+            document.getElementById('resetForm').action = '/admin/reset-password/' + uid;
+            document.getElementById('newPwInput').value = '';
+            document.getElementById('resetModal').classList.add('active');
+        }
+        function openPosts(uid, uname) {
+            document.getElementById('postsLabel').textContent = 'Posts by @' + uname;
+            document.getElementById('postsGrid').innerHTML = '<p style="color:#aaa;font-size:12px;">Loading...</p>';
+            document.getElementById('postsModal').classList.add('active');
+            fetch('/admin/user-posts/' + uid)
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.posts.length) {
+                        document.getElementById('postsGrid').innerHTML = '<p style="color:#aaa;font-size:12px;">No posts.</p>';
+                        return;
+                    }
+                    document.getElementById('postsGrid').innerHTML = data.posts.map(p => `
+                        <div class="post-thumb">
+                            ${p.image ? `<img src="/uploads/${p.image}">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;color:#aaa;padding:6px;text-align:center;">${p.content}</div>`}
+                            <button class="del-btn" onclick="deletePost(${p.id}, this)">✕</button>
+                        </div>
+                    `).join('');
+                });
+        }
+        function deletePost(pid, btn) {
+            if (!confirm('Delete this post?')) return;
+            fetch('/admin/delete-post/' + pid, {method:'POST'})
+                .then(r => r.json())
+                .then(d => { if(d.ok) btn.closest('.post-thumb').remove(); });
+        }
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+        document.querySelectorAll('.modal-overlay').forEach(m => {
+            m.addEventListener('click', e => { if(e.target === m) m.classList.remove('active'); });
+        });
+    </script>
+    </body></html>
+    """, users=users, total_users=total_users, total_posts=total_posts,
+         banned_count=banned_count, search=search)
+
+
+@app.route("/admin/ban/<int:uid>")
+@admin_required
+def admin_ban(uid):
+    user = User.query.get_or_404(uid)
+    user.is_banned = True
+    db.session.commit()
+    return redirect(url_for('admin_dashboard', q=request.args.get('q','')))
+
+@app.route("/admin/unban/<int:uid>")
+@admin_required
+def admin_unban(uid):
+    user = User.query.get_or_404(uid)
+    user.is_banned = False
+    db.session.commit()
+    return redirect(url_for('admin_dashboard', q=request.args.get('q','')))
+
+@app.route("/admin/delete-user/<int:uid>")
+@admin_required
+def admin_delete_user(uid):
+    user = User.query.get_or_404(uid)
+    # Delete avatar file
+    if user.avatar_filename:
+        try:
+            os.remove(os.path.join(app.config['UPLOAD_FOLDER'], user.avatar_filename))
+        except Exception:
+            pass
+    # Delete post images
+    for post in user.posts:
+        if post.image_filename:
+            try:
+                os.remove(os.path.join(app.config['UPLOAD_FOLDER'], post.image_filename))
+            except Exception:
+                pass
+    db.session.delete(user)
+    db.session.commit()
+    return redirect(url_for('admin_dashboard'))
+
+@app.route("/admin/reset-password/<int:uid>", methods=["POST"])
+@admin_required
+def admin_reset_password(uid):
+    user = User.query.get_or_404(uid)
+    new_pw = request.form.get("new_password","").strip()
+    if new_pw:
+        user.password_hash = generate_password_hash(new_pw)
+        db.session.commit()
+    return redirect(url_for('admin_dashboard'))
+
+@app.route("/admin/delete-post/<int:pid>", methods=["POST"])
+@admin_required
+def admin_delete_post(pid):
+    from flask import jsonify
+    post = Post.query.get_or_404(pid)
+    if post.image_filename:
+        try:
+            os.remove(os.path.join(app.config['UPLOAD_FOLDER'], post.image_filename))
+        except Exception:
+            pass
+    db.session.delete(post)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+@app.route("/admin/user-posts/<int:uid>")
+@admin_required
+def admin_user_posts(uid):
+    from flask import jsonify
+    user = User.query.get_or_404(uid)
+    posts = [{"id": p.id, "image": p.image_filename, "content": (p.content or '')[:30]} for p in user.posts]
+    return jsonify({"posts": posts})
 
 
 @app.route("/check-username")
