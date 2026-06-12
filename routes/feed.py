@@ -1,4 +1,5 @@
 import os
+import cloudinary.uploader
 from flask import Blueprint, request, redirect, url_for, render_template_string, send_from_directory, Response
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
@@ -139,8 +140,19 @@ def view_post(post_id):
 def create_post():
     if request.method == "POST":
         content = request.form.get("content","").strip()
-        file    = request.files.get("photo")
-        image_url = image_public_id = resource_type = None
+        file = request.files.get("photo")
+        
+        # إضافة معالجة للرفع مباشرة لـ Cloudinary
+        image_url = None
+        if file and allowed_file(file.filename):
+            try:
+                # رفع الملف مباشرة دون تخزينه محلياً (هذا سر العمل على Render)
+                upload_result = cloudinary.uploader.upload(file, resource_type="auto")
+                image_url = upload_result.get("secure_url")
+            except Exception as e:
+                # طباعة الخطأ في الـ Logs لتتمكن من رؤيته
+                print(f"Cloudinary Upload Error: {e}")
+                return "Error uploading to Cloudinary", 500
 
         if file and file.filename:
             from cloudinary_helper import upload_file
