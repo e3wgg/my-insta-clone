@@ -140,3 +140,12 @@ class Report(db.Model):
     created_at   = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     reporter     = db.relationship("User", foreign_keys=[reporter_id], backref="reports_made")
     reported     = db.relationship("User", foreign_keys=[reported_id], backref="reports_received")
+
+
+class SavedPost(db.Model):
+    id         = db.Column(db.Integer, primary_key=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    post_id    = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    user       = db.relationship("User", backref="saved_posts")
+    post       = db.relationship("Post", backref=db.backref("saves", cascade="all, delete-orphan"))

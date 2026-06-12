@@ -29,7 +29,9 @@ def feed_view():
         <div class="feed-container overflow-hidden bg-white mb-2">
             <div class="flex items-center justify-between px-3 py-2 border-b border-gray-100">
                 <div class="flex items-center space-x-2">
-                    {% if post.author.avatar_filename %}
+                    {% if post.author.avatar_url %}
+                        <img src="{{ post.author.avatar_url }}" class="w-8 h-8 rounded-full object-cover border border-gray-300">
+                    {% elif post.author.avatar_filename %}
                         <img src="{{ url_for('feed.uploaded_file', filename=post.author.avatar_filename) }}" class="w-8 h-8 rounded-full object-cover border border-gray-300">
                     {% else %}
                         <div class="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-[11px] font-bold text-gray-600 uppercase border border-gray-300">{{ post.author.username[:2] }}</div>
@@ -39,7 +41,24 @@ def feed_view():
                         {% if post.author.bio %}<span class="text-[10px] text-gray-400">{{ post.author.bio }}</span>{% endif %}
                     </div>
                 </div>
-                <span class="text-[10px] text-gray-400">{{ post.created_at.strftime('%b %d') }}</span>
+                <div style="position:relative;">
+                    <button onclick="toggleMenu('pmenu_{{ post.id }}')"
+                            style="background:none;border:none;cursor:pointer;padding:4px 8px;font-size:16px;color:#888;">•••</button>
+                    <div id="pmenu_{{ post.id }}" style="display:none;position:absolute;right:0;top:28px;background:white;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.15);min-width:140px;z-index:50;overflow:hidden;">
+                        <a href="{{ url_for('feed.save_post', post_id=post.id) }}"
+                           style="display:flex;align-items:center;gap:10px;padding:12px 14px;font-size:13px;color:#333;text-decoration:none;border-bottom:1px solid #f0f0f0;">
+                            <i class="fa-regular fa-bookmark" style="color:#555;"></i> Save
+                        </a>
+                        {% if post.user_id == current_user.id or current_user.is_admin %}
+                        <form action="{{ url_for('feed.delete_post', post_id=post.id) }}" method="post"
+                              onsubmit="return confirm('Delete this post?')">
+                            <button type="submit" style="width:100%;display:flex;align-items:center;gap:10px;padding:12px 14px;font-size:13px;color:#e74c3c;background:none;border:none;cursor:pointer;text-align:left;">
+                                <i class="fa-regular fa-trash-can"></i> Delete
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
             {% if post.image_url %}
             <a href="{{ url_for('feed.view_post', post_id=post.id) }}" class="block w-full bg-black">
@@ -187,13 +206,26 @@ def create_post():
     return render_template_string(full_html, current_user=current_user)
 
 
+@feed.route("/save/<int:post_id>")
+@login_required
+def save_post(post_id):
+    from models import SavedPost
+    post = Post.query.get_or_404(post_id)
+    existing = SavedPost.query.filter_by(user_id=current_user.id, post_id=post_id).first()
+    if existing:
+        db.session.delete(existing)
+    else:
+        db.session.add(SavedPost(user_id=current_user.id, post_id=post_id))
+    db.session.commit()
+    return redirect(request.referrer or url_for('feed.view_post', post_id=post_id))
+
+
 @feed.route("/delete-post/<int:post_id>", methods=["POST"])
 @login_required
 def delete_post(post_id):
     post = Post.query.get_or_404(post_id)
-    if post.user_id != current_user.id:
+    if post.user_id != current_user.id and not current_user.is_admin:
         return redirect(url_for('feed.feed_view'))
-    # Delete from Cloudinary
     if post.image_public_id:
         from cloudinary_helper import delete_file
         delete_file(post.image_public_id, post.resource_type or "image")
