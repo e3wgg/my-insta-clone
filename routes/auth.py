@@ -53,8 +53,26 @@ def welcome():
         <img class="photo" style="width:110px;height:85px;top:370px;left:60px;transform:rotate(5deg);" src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=300">
         <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.35) 0%,rgba(0,0,0,.1) 50%,rgba(216,218,219,.7) 85%,rgba(216,218,219,1) 100%);z-index:10;"></div>
         <div class="logo-wrap">
-            <div class="insta-cam"><i class="fa-brands fa-dewgram"></i></div>
-            <div class="logo-text">dewgram</div>
+            <div style="width:64px;height:64px;margin:0 auto 10px;filter:drop-shadow(0 2px 8px rgba(0,0,0,.5));">
+                <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                  <rect width="100" height="100" rx="22" fill="rgba(255,255,255,0.15)"/>
+                  <!-- Dolphin body -->
+                  <ellipse cx="52" cy="55" rx="28" ry="14" fill="white" opacity="0.9"/>
+                  <!-- Dolphin head/snout -->
+                  <ellipse cx="76" cy="52" rx="10" ry="7" fill="white" opacity="0.9"/>
+                  <ellipse cx="85" cy="51" rx="5" ry="3" fill="white" opacity="0.8"/>
+                  <!-- Tail -->
+                  <path d="M24 55 Q12 45 10 38 Q18 48 24 50 Z" fill="white" opacity="0.85"/>
+                  <path d="M24 55 Q12 65 10 72 Q18 62 24 60 Z" fill="white" opacity="0.85"/>
+                  <!-- Dorsal fin -->
+                  <path d="M50 41 Q55 25 65 28 Q58 35 55 41 Z" fill="white" opacity="0.85"/>
+                  <!-- Eye -->
+                  <circle cx="78" cy="49" r="2" fill="#2a6a96"/>
+                  <!-- Wave -->
+                  <path d="M15 72 Q30 66 45 70 Q60 74 75 68 Q85 64 92 68" stroke="rgba(255,255,255,0.4)" stroke-width="2" fill="none"/>
+                </svg>
+            </div>
+            <div class="logo-text">Dewgram</div>
         </div>
     </div>
     <div class="buttons-area">
@@ -259,7 +277,7 @@ def login():
         <span style="color:white;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.04em;">Sign In</span>
     </div>
     <div style="padding:28px 16px 20px">
-        <div class="insta-cam"><i class="fa-brands fa-dewgram" style="font-size:26px;color:#888;"></i></div>
+        <div class="insta-cam"><i class="fa-brands fa-instagram" style="font-size:26px;color:#888;"></i></div>
         <form method="post" style="margin-bottom:14px">
             <div class="field-card">
                 <div class="field-row"><i class="fa-regular fa-user field-icon"></i><input name="username" placeholder="Username or Email" autocomplete="off" required class="field-input"></div>
@@ -280,9 +298,96 @@ def login():
             {% endif %}
             <div style="margin-top:10px"><button type="submit" class="signin-btn">Sign In</button></div>
         </form>
-        <div style="text-align:center;margin-top:18px;"><a href="#" style="color:#3a7bbf;font-size:14px;text-decoration:none;">Forgot Password?</a></div>
+        <div style="text-align:center;margin-top:18px;"><a href="/change-password" style="color:#3a7bbf;font-size:14px;text-decoration:none;">Forgot Password?</a></div>
     </div>
     </body></html>""", error=error)
+
+
+@auth.route("/change-password", methods=["GET","POST"])
+def change_password():
+    msg   = None
+    error = None
+    if request.method == "POST":
+        username    = request.form.get("username","").strip().lower()
+        old_pw      = request.form.get("old_password","").strip()
+        new_pw      = request.form.get("new_password","").strip()
+        confirm_pw  = request.form.get("confirm_password","").strip()
+
+        if not username or not old_pw or not new_pw or not confirm_pw:
+            error = "Please fill in all fields."
+        elif new_pw != confirm_pw:
+            error = "New passwords don't match."
+        elif len(new_pw) < 6:
+            error = "New password must be at least 6 characters."
+        else:
+            user = User.query.filter_by(username=username).first()
+            if not user or not check_password_hash(user.password_hash, old_pw):
+                error = "Username or current password is incorrect."
+            else:
+                user.password_hash = generate_password_hash(new_pw)
+                db.session.commit()
+                msg = "✅ Password changed successfully! You can now sign in."
+
+    return render_template_string("""
+    <!DOCTYPE html><html><head><meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{background:#d0d3d6;font-family:-apple-system,sans-serif;max-width:480px;margin:0 auto;min-height:100vh}
+        .hdr{background:linear-gradient(to bottom,#4a8db7,#2a6a96);display:flex;align-items:center;height:48px;padding:0 14px;position:sticky;top:0}
+        .hdr a{color:white;font-size:17px;margin-right:12px;text-decoration:none}
+        .hdr span{color:white;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.04em}
+        .card{background:#f5f5f5;border:1px solid #d0d0d0;border-radius:4px;overflow:hidden;margin:16px 14px}
+        .field-row{display:flex;align-items:center;padding:13px 14px;background:#f5f5f5;border-bottom:1px solid #d0d0d0}
+        .field-row:last-child{border-bottom:none}
+        .fi{color:#888;margin-right:10px;font-size:14px;width:18px;text-align:center;flex-shrink:0}
+        .fi-input{background:transparent;border:none;outline:none;font-size:14px;color:#333;width:100%}
+        .fi-input::placeholder{color:#aaa}
+        .save-btn{display:block;width:calc(100% - 28px);margin:0 14px 16px;padding:13px;background:linear-gradient(to bottom,#7bc96f,#5aab4e);color:white;font-weight:700;font-size:14px;border:none;border-radius:4px;cursor:pointer}
+        .msg-ok{background:#e8fdf0;border:1px solid #b2dfdb;border-radius:4px;padding:12px 14px;margin:0 14px 14px;font-size:13px;color:#27ae60;text-align:center}
+        .msg-err{background:#ffe0e0;border:1px solid #f5c0c0;border-radius:4px;padding:12px 14px;margin:0 14px 14px;font-size:13px;color:#c0392b}
+        .section-lbl{font-size:11px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.05em;padding:14px 16px 6px}
+        .signin-link{text-align:center;padding:10px;font-size:13px;color:#4a8db7;text-decoration:none;display:block}
+    </style></head><body>
+    <div class="hdr">
+        <a href="javascript:history.back()"><i class="fa-solid fa-chevron-left"></i></a>
+        <span>Change Password</span>
+    </div>
+
+    {% if msg %}
+        <div class="msg-ok">{{ msg }}</div>
+        <a href="/login" class="signin-link">← Sign In</a>
+    {% else %}
+        {% if error %}<div class="msg-err"><i class="fa-solid fa-circle-exclamation" style="margin-right:6px;"></i>{{ error }}</div>{% endif %}
+        <form method="post">
+            <div class="section-lbl">Your Account</div>
+            <div class="card">
+                <div class="field-row">
+                    <i class="fa-regular fa-user fi"></i>
+                    <input name="username" placeholder="Username" autocomplete="off" required class="fi-input">
+                </div>
+            </div>
+            <div class="section-lbl">Passwords</div>
+            <div class="card">
+                <div class="field-row">
+                    <i class="fa-solid fa-lock fi"></i>
+                    <input type="password" name="old_password" placeholder="Current password" required class="fi-input">
+                </div>
+                <div class="field-row">
+                    <i class="fa-solid fa-key fi"></i>
+                    <input type="password" name="new_password" placeholder="New password" required class="fi-input">
+                </div>
+                <div class="field-row">
+                    <i class="fa-solid fa-check fi"></i>
+                    <input type="password" name="confirm_password" placeholder="Confirm new password" required class="fi-input">
+                </div>
+            </div>
+            <button type="submit" class="save-btn">Change Password</button>
+        </form>
+    {% endif %}
+    </body></html>
+    """, msg=msg, error=error, current_user=current_user)
 
 
 @auth.route("/logout")
@@ -354,7 +459,7 @@ def settings():
         <div class="sec">Account</div>
         <div style="border:1px solid #d0d0d0;border-radius:4px;overflow:hidden;margin-bottom:14px">
             <a href="/edit-profile" class="row"><div class="rl"><i class="fa-regular fa-user ri"></i>Edit Profile</div><i class="fa-solid fa-chevron-right" style="color:#bbb;font-size:12px"></i></a>
-            <a href="/edit-profile" class="row"><div class="rl"><i class="fa-solid fa-lock ri"></i>Change Password</div><i class="fa-solid fa-chevron-right" style="color:#bbb;font-size:12px"></i></a>
+            <a href="/change-password" class="row"><div class="rl"><i class="fa-solid fa-lock ri"></i>Change Password</div><i class="fa-solid fa-chevron-right" style="color:#bbb;font-size:12px"></i></a>
             {% if current_user.email %}
             <div class="row" style="cursor:default">
                 <div class="rl"><i class="fa-regular fa-envelope ri"></i><span>{{ current_user.email }}</span></div>

@@ -128,13 +128,24 @@ def profile_view(username):
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:2px;">
             {{% for post in user.posts %}}
-            <a href="{{{{ url_for('feed.view_post',post_id=post.id) }}}}" style="aspect-ratio:1;display:block;overflow:hidden;background:#ddd;">
-                {{% if post.image_url %}}
-                    <img src="{{{{ post.image_url }}}}" style="width:100%;height:100%;object-fit:cover;">
-                {{% else %}}
-                    <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;color:#aaa;padding:4px;text-align:center;">{{{{ post.content[:15] }}}}...</div>
+            <div style="aspect-ratio:1;overflow:hidden;background:#ddd;position:relative;">
+                <a href="{{{{ url_for('feed.view_post',post_id=post.id) }}}}" style="display:block;width:100%;height:100%;">
+                    {{% if post.image_url %}}
+                        <img src="{{{{ post.image_url }}}}" style="width:100%;height:100%;object-fit:cover;">
+                    {{% else %}}
+                        <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;color:#aaa;padding:4px;text-align:center;">{{{{ post.content[:15] }}}}...</div>
+                    {{% endif %}}
+                </a>
+                {{% if user.id == current_user.id %}}
+                <form action="{{{{ url_for('feed.delete_post',post_id=post.id) }}}}" method="post"
+                      onsubmit="return confirm('Delete this post?')"
+                      style="position:absolute;top:4px;right:4px;margin:0;">
+                    <button type="submit" style="background:rgba(0,0,0,.55);border:none;cursor:pointer;color:white;width:24px;height:24px;border-radius:4px;font-size:12px;display:flex;align-items:center;justify-content:center;">
+                        <i class="fa-solid fa-trash" style="font-size:10px;"></i>
+                    </button>
+                </form>
                 {{% endif %}}
-            </a>
+            </div>
             {{% endfor %}}
         </div>
         {{% endif %}}

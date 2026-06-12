@@ -14,22 +14,23 @@ IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 
 def upload_file(file_storage, folder="uploads"):
-    """
-    رفع ملف (صورة أو فيديو) إلى Cloudinary.
-    يرجع dict فيه:
-      - url:        رابط الملف
-      - public_id:  معرّف Cloudinary (للحذف لاحقاً)
-      - resource_type: 'image' أو 'video'
-    أو None لو فشل الرفع.
-    """
     try:
-        ext = file_storage.filename.rsplit('.', 1)[-1].lower()
+        filename = file_storage.filename or ""
+        ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ""
         resource_type = "video" if ext in VIDEO_EXTENSIONS else "image"
 
+        # Read file bytes — works on all hosting platforms including Render
+        file_bytes = file_storage.read()
+        if not file_bytes:
+            print("Cloudinary: empty file")
+            return None
+
         result = cloudinary.uploader.upload(
-            file_storage,
+            file_bytes,
             folder        = folder,
             resource_type = resource_type,
+            use_filename  = True,
+            unique_filename = True,
         )
         return {
             "url":           result["secure_url"],
@@ -42,7 +43,6 @@ def upload_file(file_storage, folder="uploads"):
 
 
 def delete_file(public_id, resource_type="image"):
-    """حذف ملف من Cloudinary"""
     try:
         cloudinary.uploader.destroy(public_id, resource_type=resource_type)
     except Exception as e:

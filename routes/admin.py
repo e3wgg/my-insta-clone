@@ -126,15 +126,209 @@ def admin_logout():
 @admin_bp.route(f"/{ADMIN_SECRET_PATH}/")
 @admin_required
 def admin_dashboard():
-    search = request.args.get('q', '').strip()
+    search  = request.args.get('q', '').strip()
+    ffilter = request.args.get('filter', 'all')  # all / banned / active
+
+    query = User.query
     if search:
-        users = User.query.filter(User.username.ilike(f'%{search}%')).order_by(User.created_at.desc()).all()
-    else:
-        users = User.query.order_by(User.created_at.desc()).all()
+        query = query.filter(User.username.ilike(f'%{search}%'))
+    if ffilter == 'banned':
+        query = query.filter_by(is_banned=True)
+    elif ffilter == 'active':
+        query = query.filter_by(is_banned=False)
+    users = query.order_by(User.created_at.desc()).all()
 
     total_users  = User.query.count()
     total_posts  = Post.query.count()
     banned_count = User.query.filter_by(is_banned=True).count()
+    reports_count = Report.query.filter_by(status='pending').count()
+
+    return render_template_string("""
+    <!DOCTYPE html><html><head><meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Admin — Dewgram</title>
+    <style>
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{background:#f0f2f5;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#333}
+        .topbar{background:linear-gradient(135deg,#0d0d0d,#1a1a2e);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+        .topbar h1{color:#fff;font-size:17px;font-weight:700}
+        .topbar a{color:#aaa;font-size:12px;text-decoration:none;padding:6px 14px;border:1px solid #333;border-radius:4px;white-space:nowrap}
+        .topbar a:hover{color:#fff;border-color:#e94560}
+        .toplinks{display:flex;gap:8px;align-items:center}
+        .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:18px 24px 0}
+        .stat{background:#fff;border-radius:10px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+        .stat-num{font-size:28px;font-weight:800;color:#1a1a2e}
+        .stat-lbl{font-size:10px;color:#999;margin-top:3px;text-transform:uppercase;letter-spacing:.05em}
+        .stat.red .stat-num{color:#e94560}
+        .stat.orange .stat-num{color:#e67e22}
+        .section{padding:18px 24px}
+        .section-title{font-size:12px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
+        .filters{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+        .filter-btn{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;text-decoration:none;border:1px solid #ddd;background:#fff;color:#555}
+        .filter-btn.active{background:#1a1a2e;color:#fff;border-color:#1a1a2e}
+        .search-bar{display:flex;gap:8px;margin-bottom:14px}
+        .search-bar input{flex:1;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-size:13px;outline:none}
+        .search-bar button{padding:10px 18px;background:#4a8db7;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
+        table{width:100%;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.07);border-collapse:collapse;overflow:hidden}
+        th{background:#f8f9fa;padding:11px 14px;text-align:left;font-size:10px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #eee}
+        td{padding:11px 14px;font-size:13px;border-bottom:1px solid #f5f5f5;vertical-align:middle}
+        tr:last-child td{border-bottom:none}
+        tr:hover td{background:#fafafa}
+        .av{width:34px;height:34px;border-radius:50%;object-fit:cover;border:1px solid #ddd}
+        .avp{width:34px;height:34px;border-radius:50%;background:#dde;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#556}
+        .badge{padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
+        .b-ban{background:#fff0f0;color:#e94560;border:1px solid #ffc0c0}
+        .b-ok{background:#f0fff4;color:#27ae60;border:1px solid #b2dfdb}
+        .b-admin{background:#fff8e1;color:#f39c12;border:1px solid #ffe082;margin-left:3px}
+        .btn{display:inline-block;padding:5px 10px;border-radius:4px;font-size:11px;font-weight:700;text-decoration:none;cursor:pointer;border:none;margin:1px;white-space:nowrap}
+        .br{background:#e94560;color:#fff}.bo{background:#e67e22;color:#fff}.bg{background:#27ae60;color:#fff}.bb{background:#4a8db7;color:#fff}.bx{background:#95a5a6;color:#fff}
+        .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;align-items:center;justify-content:center}
+        .overlay.on{display:flex}
+        .modal{background:#fff;border-radius:12px;padding:28px 24px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,.2)}
+        .modal h3{font-size:15px;font-weight:700;margin-bottom:6px}
+        .modal p{font-size:12px;color:#777;margin-bottom:18px}
+        .modal input{width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:13px;margin-bottom:12px;outline:none}
+        .mbtns{display:flex;gap:8px}
+        .mbtns button{flex:1;padding:10px;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer}
+        .mc{background:#e94560;color:#fff}.mk{background:#eee;color:#555}
+        .pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px;margin-top:10px;max-height:320px;overflow-y:auto}
+        .pt{position:relative;aspect-ratio:1;border-radius:6px;overflow:hidden;background:#ddd}
+        .pt img,.pt video{width:100%;height:100%;object-fit:cover}
+        .pt .dx{position:absolute;top:3px;right:3px;background:rgba(233,69,96,.9);color:#fff;border:none;border-radius:3px;padding:2px 5px;font-size:9px;font-weight:700;cursor:pointer}
+    </style></head><body>
+
+    <div class="topbar">
+        <h1>🛡️ Dewgram Admin</h1>
+        <div class="toplinks">
+            <a href="/{{ secret }}/support">🎫 Tickets</a>
+            <a href="/{{ secret }}/logout">Logout</a>
+        </div>
+    </div>
+
+    <div class="stats">
+        <div class="stat"><div class="stat-num">{{ total_users }}</div><div class="stat-lbl">Users</div></div>
+        <div class="stat"><div class="stat-num">{{ total_posts }}</div><div class="stat-lbl">Posts</div></div>
+        <div class="stat red"><div class="stat-num">{{ banned_count }}</div><div class="stat-lbl">Banned</div></div>
+        <div class="stat orange"><div class="stat-num">{{ reports_count }}</div><div class="stat-lbl">Reports</div></div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Users Management</div>
+
+        <!-- Filters -->
+        <div class="filters">
+            <a href="?filter=all&q={{ search }}" class="filter-btn {% if ffilter=='all' %}active{% endif %}">All ({{ total_users }})</a>
+            <a href="?filter=active&q={{ search }}" class="filter-btn {% if ffilter=='active' %}active{% endif %}">Active</a>
+            <a href="?filter=banned&q={{ search }}" class="filter-btn {% if ffilter=='banned' %}active{% endif %}">Banned ({{ banned_count }})</a>
+        </div>
+
+        <form class="search-bar" method="get">
+            <input type="hidden" name="filter" value="{{ ffilter }}">
+            <input name="q" value="{{ search }}" placeholder="Search username..." autocomplete="off">
+            <button type="submit">Search</button>
+        </form>
+
+        <table>
+            <thead><tr><th>User</th><th>Email</th><th>Posts</th><th>Joined</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>
+            {% for u in users %}
+            <tr>
+                <td>
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        {% if u.avatar_url %}<img src="{{ u.avatar_url }}" class="av">
+                        {% else %}<div class="avp">{{ u.username[:2].upper() }}</div>{% endif %}
+                        <div>
+                            <div style="font-weight:700;">@{{ u.username }}</div>
+                            {% if u.bio %}<div style="font-size:10px;color:#aaa;">{{ u.bio[:25] }}</div>{% endif %}
+                        </div>
+                    </div>
+                </td>
+                <td style="color:#888;font-size:11px;">{{ u.email or '—' }}</td>
+                <td style="font-weight:700;">{{ u.posts|length }}</td>
+                <td style="color:#bbb;font-size:11px;">{{ u.created_at.strftime('%Y-%m-%d') }}</td>
+                <td>
+                    {% if u.is_banned %}<span class="badge b-ban">Banned</span>
+                    {% else %}<span class="badge b-ok">Active</span>{% endif %}
+                    {% if u.is_admin %}<span class="badge b-admin">Admin</span>{% endif %}
+                </td>
+                <td>
+                    {% if u.is_banned %}
+                        <a href="/{{ secret }}/unban/{{ u.id }}" class="btn bg">Unban</a>
+                    {% else %}
+                        <a href="/{{ secret }}/ban/{{ u.id }}" class="btn bo" onclick="return confirm('Ban @{{ u.username }}?')">Ban</a>
+                    {% endif %}
+                    <button class="btn bb" onclick="openReset({{ u.id }},'{{ u.username }}')">Reset PW</button>
+                    <button class="btn bx" onclick="openPosts({{ u.id }},'{{ u.username }}')">Posts</button>
+                    <a href="/{{ secret }}/delete-user/{{ u.id }}" class="btn br" onclick="return confirm('DELETE @{{ u.username }}?')">Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+            {% if not users %}
+            <tr><td colspan="6" style="text-align:center;color:#aaa;padding:30px;">No users found.</td></tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Reset Password Modal -->
+    <div class="overlay" id="mReset">
+        <div class="modal">
+            <h3>🔑 Reset Password</h3>
+            <p id="rlabel">New password for user</p>
+            <form id="rform" method="post">
+                <input type="password" name="new_password" id="rpw" placeholder="New password (min 6 chars)" required minlength="6">
+                <div class="mbtns">
+                    <button type="button" class="mk" onclick="close_('mReset')">Cancel</button>
+                    <button type="submit" class="mc">Reset</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Posts Modal -->
+    <div class="overlay" id="mPosts">
+        <div class="modal" style="width:500px;max-width:95vw;">
+            <h3>📸 Posts</h3>
+            <p id="plabel"></p>
+            <div class="pgrid" id="pgrid"></div>
+            <div style="margin-top:14px;text-align:right;">
+                <button class="mk" style="padding:8px 18px;border:none;border-radius:6px;cursor:pointer;font-weight:700;" onclick="close_('mPosts')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const S = "{{ secret }}";
+        function openReset(uid,un){
+            document.getElementById('rlabel').textContent='Set new password for @'+un;
+            document.getElementById('rform').action='/'+S+'/reset-password/'+uid;
+            document.getElementById('rpw').value='';
+            document.getElementById('mReset').classList.add('on');
+        }
+        function openPosts(uid,un){
+            document.getElementById('plabel').textContent='Posts by @'+un;
+            document.getElementById('pgrid').innerHTML='<p style="color:#aaa;font-size:12px;padding:8px;">Loading...</p>';
+            document.getElementById('mPosts').classList.add('on');
+            fetch('/'+S+'/user-posts/'+uid).then(r=>r.json()).then(d=>{
+                if(!d.posts.length){document.getElementById('pgrid').innerHTML='<p style="color:#aaa;font-size:12px;">No posts.</p>';return;}
+                document.getElementById('pgrid').innerHTML=d.posts.map(p=>`
+                    <div class="pt">
+                        ${p.image?`<img src="${p.image}">`:`<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:9px;color:#aaa;padding:4px;text-align:center;">${p.content}</div>`}
+                        <button class="dx" onclick="delPost(${p.id},this)">✕</button>
+                    </div>`).join('');
+            });
+        }
+        function delPost(pid,btn){
+            if(!confirm('Delete this post?'))return;
+            fetch('/'+S+'/delete-post/'+pid,{method:'POST'}).then(r=>r.json()).then(d=>{if(d.ok)btn.closest('.pt').remove();});
+        }
+        function close_(id){document.getElementById(id).classList.remove('on');}
+        document.querySelectorAll('.overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('on');}));
+    </script>
+    </body></html>
+    """, users=users, total_users=total_users, total_posts=total_posts,
+         banned_count=banned_count, reports_count=reports_count,
+         search=search, ffilter=ffilter, secret=ADMIN_SECRET_PATH)
 
     return render_template_string("""
     <!DOCTYPE html><html><head><meta charset="UTF-8">

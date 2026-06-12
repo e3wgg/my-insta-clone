@@ -112,6 +112,14 @@ def view_post(post_id):
                         {% if current_user in post.likes %}<i class="fa-solid fa-heart text-red-500"></i>
                         {% else %}<i class="fa-regular fa-heart"></i>{% endif %}
                     </a>
+                    {% if post.user_id == current_user.id %}
+                    <form action="{{ url_for('feed.delete_post', post_id=post.id) }}" method="post"
+                          onsubmit="return confirm('Delete this post?')" style="display:inline;">
+                        <button type="submit" style="background:none;border:none;cursor:pointer;color:#e74c3c;font-size:18px;padding:0;">
+                            <i class="fa-regular fa-trash-can"></i>
+                        </button>
+                    </form>
+                    {% endif %}
                 </div>
                 <div class="text-[11px] font-bold text-gray-800 mb-1">{{ post.likes|length }} likes</div>
                 {% if post.content %}
