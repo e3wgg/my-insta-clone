@@ -138,21 +138,15 @@ def view_post(post_id):
 @feed.route("/create-post", methods=["GET","POST"])
 @login_required
 def create_post():
-    if request.method == "POST":
-        content = request.form.get("content","").strip()
-        file = request.files.get("photo")
-        
-        # إضافة معالجة للرفع مباشرة لـ Cloudinary
-        image_url = None
-        if file and allowed_file(file.filename):
-            try:
-                # رفع الملف مباشرة دون تخزينه محلياً (هذا سر العمل على Render)
-                upload_result = cloudinary.uploader.upload(file, resource_type="auto")
-                image_url = upload_result.get("secure_url")
-            except Exception as e:
-                # طباعة الخطأ في الـ Logs لتتمكن من رؤيته
-                print(f"Cloudinary Upload Error: {e}")
-                return "Error uploading to Cloudinary", 500
+    # هذا السطر سيبين لنا إذا كان الخطأ من Flask نفسه
+    print("DEBUG: create_post called") 
+    try:
+        if request.method == "POST":
+            # ... كودك هنا ...
+    except Exception as e:
+        import traceback
+        print(traceback.format_exc()) # هذا سيطبع الخطأ الحقيقي في سجلات Render
+        return str(e), 500
 
         if file and file.filename:
             from cloudinary_helper import upload_file
