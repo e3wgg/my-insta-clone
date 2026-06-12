@@ -38,7 +38,7 @@ def welcome():
         .btn-row:hover{background:#e5e5e5}
         .btn-icon{font-size:17px;color:#777;margin-right:12px;width:20px;text-align:center}
         .btn-arrow{font-size:13px;color:#aaa;margin-left:auto}
-    </style><title>Instagram</title></head><body>
+    </style><title>dewgram</title></head><body>
     <div class="collage-area">
         <img class="photo" style="width:130px;height:100px;top:-10px;left:-15px;transform:rotate(-8deg);" src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300">
         <img class="photo" style="width:110px;height:85px;top:-5px;left:105px;transform:rotate(5deg);" src="https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=300">
@@ -53,8 +53,8 @@ def welcome():
         <img class="photo" style="width:110px;height:85px;top:370px;left:60px;transform:rotate(5deg);" src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=300">
         <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.35) 0%,rgba(0,0,0,.1) 50%,rgba(216,218,219,.7) 85%,rgba(216,218,219,1) 100%);z-index:10;"></div>
         <div class="logo-wrap">
-            <div class="insta-cam"><i class="fa-brands fa-instagram"></i></div>
-            <div class="logo-text">Instagram</div>
+            <div class="insta-cam"><i class="fa-brands fa-dewgram"></i></div>
+            <div class="logo-text">dewgram</div>
         </div>
     </div>
     <div class="buttons-area">
@@ -160,7 +160,7 @@ def register():
                 <input id="email" type="email" placeholder="Email" class="field-input">
             </div>
         </div>
-        <p style="font-size:11px;color:#666;margin-bottom:6px;">Your phone number and email address will always remain private.</p>
+        <p style="font-size:11px;color:#666;margin-bottom:6px;">Your email address will always remain private.</p>
         <p style="font-size:11px;color:#666;margin-bottom:12px;">By clicking Register you agree to the <a href="#" style="color:#3897f0;">Terms of Service</a> and <a href="#" style="color:#3897f0;">Privacy Policy</a>.</p>
         <form method="post" id="reg_form" enctype="multipart/form-data">
             <input type="hidden" name="username" id="h_user">
@@ -259,7 +259,7 @@ def login():
         <span style="color:white;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.04em;">Sign In</span>
     </div>
     <div style="padding:28px 16px 20px">
-        <div class="insta-cam"><i class="fa-brands fa-instagram" style="font-size:26px;color:#888;"></i></div>
+        <div class="insta-cam"><i class="fa-brands fa-dewgram" style="font-size:26px;color:#888;"></i></div>
         <form method="post" style="margin-bottom:14px">
             <div class="field-card">
                 <div class="field-row"><i class="fa-regular fa-user field-icon"></i><input name="username" placeholder="Username or Email" autocomplete="off" required class="field-input"></div>
