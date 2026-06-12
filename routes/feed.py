@@ -1,4 +1,5 @@
 import os
+import cloudinary.uploader
 from flask import Blueprint, request, redirect, url_for, render_template_string, send_from_directory, Response
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
@@ -137,15 +138,10 @@ def view_post(post_id):
 @feed.route("/create-post", methods=["GET","POST"])
 @login_required
 def create_post():
-    # هذا السطر سيبين لنا إذا كان الخطأ من Flask نفسه
-    print("DEBUG: create_post called") 
-    try:
-        if request.method == "POST":
-            # ... كودك هنا ...
-    except Exception as e:
-        import traceback
-        print(traceback.format_exc()) # هذا سيطبع الخطأ الحقيقي في سجلات Render
-        return str(e), 500
+    if request.method == "POST":
+        content = request.form.get("content","").strip()
+        file    = request.files.get("photo")
+        image_url = image_public_id = resource_type = None
 
         if file and file.filename:
             from cloudinary_helper import upload_file
