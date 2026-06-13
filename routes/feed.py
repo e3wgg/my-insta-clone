@@ -99,6 +99,20 @@ def feed_view():
         <div class="p-8 text-center text-gray-400 text-xs bg-white border border-gray-200">No posts yet.</div>
         {% endfor %}
     </div>
+    <script>
+    function toggleMenu(id){
+        document.querySelectorAll('[id^="pmenu_"]').forEach(function(m){
+            if(m.id!==id) m.style.display='none';
+        });
+        var el=document.getElementById(id);
+        if(el) el.style.display=el.style.display==='none'?'block':'none';
+    }
+    document.addEventListener('click',function(e){
+        if(!e.target.closest('[id^="pmenu_"]') && !e.target.closest('button[onclick]')){
+            document.querySelectorAll('[id^="pmenu_"]').forEach(function(m){m.style.display='none';});
+        }
+    });
+    </script>
     """
     full_html = get_layout(content_html, active_tab='home')
     return render_template_string(full_html, posts=posts, current_user=current_user)

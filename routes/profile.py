@@ -121,22 +121,62 @@ def profile_view(username):
         </div>
         {{% endif %}}
         <div style="display:flex;border-bottom:1px solid #e0e0e0;background:#fff;">
-            <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:10px 0;border-bottom:2px solid #3897f0;"><i class="fa-solid fa-grip" style="font-size:18px;color:#3897f0;"></i></div>
-            <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:10px 0;"><i class="fa-solid fa-bars" style="font-size:18px;color:#bbb;"></i></div>
-            <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:10px 0;"><i class="fa-regular fa-map" style="font-size:18px;color:#bbb;"></i></div>
-            <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:10px 0;"><i class="fa-regular fa-user" style="font-size:18px;color:#bbb;"></i></div>
+            <a href="?tab=posts"
+               style="flex:1;display:flex;align-items:center;justify-content:center;padding:10px 0;text-decoration:none;border-bottom:{{% if active_profile_tab!='saved' %}}2px solid #3897f0{{% else %}}0{{% endif %}};">
+                <i class="fa-solid fa-grip" style="font-size:18px;" class="{{% if active_profile_tab!='saved' %}}text-blue-500{{% else %}}text-gray-300{{% endif %}}"></i>
+            </a>
+            {{% if user.id == current_user.id %}}
+            <a href="?tab=saved"
+               style="flex:1;display:flex;align-items:center;justify-content:center;padding:10px 0;text-decoration:none;border-bottom:{{% if active_profile_tab=='saved' %}}2px solid #3897f0{{% else %}}0{{% endif %}};">
+                <i class="fa-regular fa-bookmark" style="font-size:18px;" class="{{% if active_profile_tab=='saved' %}}text-blue-500{{% else %}}text-gray-300{{% endif %}}"></i>
+            </a>
+            {{% endif %}}
         </div>
+
+        {{% if active_profile_tab == 'saved' %}}
+        <!-- Saved posts grid -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:2px;">
+            {{% for sp in saved_posts %}}
+            <a href="{{{{ url_for('feed.view_post',post_id=sp.post.id) }}}}" style="aspect-ratio:1;display:block;overflow:hidden;background:#ddd;position:relative;">
+                {{% if sp.post.image_url %}}
+                    {{% if sp.post.resource_type == 'video' %}}
+                        <video src="{{{{ sp.post.image_url }}}}" style="width:100%;height:100%;object-fit:cover;" muted></video>
+                        <div style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.5);border-radius:3px;padding:2px 5px;">
+                            <i class="fa-solid fa-play" style="font-size:9px;color:white;"></i>
+                        </div>
+                    {{% else %}}
+                        <img src="{{{{ sp.post.image_url }}}}" style="width:100%;height:100%;object-fit:cover;">
+                    {{% endif %}}
+                {{% else %}}
+                    <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;color:#aaa;padding:4px;text-align:center;">{{{{ sp.post.content[:15] }}}}...</div>
+                {{% endif %}}
+            </a>
+            {{% else %}}
+            <div style="grid-column:1/-1;padding:40px;text-align:center;color:#aaa;font-size:13px;">
+                <i class="fa-regular fa-bookmark" style="font-size:36px;display:block;margin-bottom:10px;"></i>No saved posts yet.
+            </div>
+            {{% endfor %}}
+        </div>
+        {{% else %}}
+        <!-- Posts grid -->
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:2px;">
             {{% for post in user.posts %}}
             <div style="aspect-ratio:1;overflow:hidden;background:#ddd;position:relative;">
                 <a href="{{{{ url_for('feed.view_post',post_id=post.id) }}}}" style="display:block;width:100%;height:100%;">
                     {{% if post.image_url %}}
-                        <img src="{{{{ post.image_url }}}}" style="width:100%;height:100%;object-fit:cover;">
+                        {{% if post.resource_type == 'video' %}}
+                            <video src="{{{{ post.image_url }}}}" style="width:100%;height:100%;object-fit:cover;" muted></video>
+                            <div style="position:absolute;top:4px;left:4px;background:rgba(0,0,0,.5);border-radius:3px;padding:2px 5px;">
+                                <i class="fa-solid fa-play" style="font-size:9px;color:white;"></i>
+                            </div>
+                        {{% else %}}
+                            <img src="{{{{ post.image_url }}}}" style="width:100%;height:100%;object-fit:cover;">
+                        {{% endif %}}
                     {{% else %}}
                         <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;color:#aaa;padding:4px;text-align:center;">{{{{ post.content[:15] }}}}...</div>
                     {{% endif %}}
                 </a>
-                {{% if user.id == current_user.id %}}
+                {{% if user.id == current_user.id or current_user.is_admin %}}
                 <form action="{{{{ url_for('feed.delete_post',post_id=post.id) }}}}" method="post"
                       onsubmit="return confirm('Delete this post?')"
                       style="position:absolute;top:4px;right:4px;margin:0;">
@@ -146,16 +186,28 @@ def profile_view(username):
                 </form>
                 {{% endif %}}
             </div>
+            {{% else %}}
+            <div style="grid-column:1/-1;padding:40px;text-align:center;color:#aaa;font-size:13px;">No posts yet.</div>
             {{% endfor %}}
         </div>
         {{% endif %}}
+        {{% endif %}}
     </div>
     """
+    active_profile_tab = request.args.get('tab', 'posts')
+    from models import SavedPost
+    saved_posts = SavedPost.query.filter_by(user_id=user.id).order_by(SavedPost.created_at.desc()).all() if user.id == current_user.id else []
     active_tab = 'profile' if username == current_user.username else ''
-    full_html  = get_layout(content_html, active_tab=active_tab, title=user.username.upper(), dots_link=dots_link)
+    # Remove back arrow for own profile
+    if is_me:
+        back_arrow = ''
+    else:
+        back_arrow = '<a href="javascript:history.back()" style="color:white;font-size:17px;margin-right:10px;text-decoration:none;"><i class="fa-solid fa-chevron-left"></i></a>'
+    full_html  = get_layout(content_html, active_tab=active_tab, title=user.username.upper(), dots_link=dots_link, back_arrow=back_arrow)
     return render_template_string(full_html, user=user, current_user=current_user,
                                   show_list=show_list, followers_list=followers_list,
-                                  following_list=following_list, i_block=i_block, they_block=they_block)
+                                  following_list=following_list, i_block=i_block, they_block=they_block,
+                                  active_profile_tab=active_profile_tab, saved_posts=saved_posts)
 
 
 @profile.route("/notifications")

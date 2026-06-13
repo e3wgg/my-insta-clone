@@ -53,25 +53,6 @@ def welcome():
         <img class="photo" style="width:110px;height:85px;top:370px;left:60px;transform:rotate(5deg);" src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=300">
         <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.35) 0%,rgba(0,0,0,.1) 50%,rgba(216,218,219,.7) 85%,rgba(216,218,219,1) 100%);z-index:10;"></div>
         <div class="logo-wrap">
-            <div style="width:64px;height:64px;margin:0 auto 10px;filter:drop-shadow(0 2px 8px rgba(0,0,0,.5));">
-                <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                  <rect width="100" height="100" rx="22" fill="rgba(255,255,255,0.15)"/>
-                  <!-- Dolphin body -->
-                  <ellipse cx="52" cy="55" rx="28" ry="14" fill="white" opacity="0.9"/>
-                  <!-- Dolphin head/snout -->
-                  <ellipse cx="76" cy="52" rx="10" ry="7" fill="white" opacity="0.9"/>
-                  <ellipse cx="85" cy="51" rx="5" ry="3" fill="white" opacity="0.8"/>
-                  <!-- Tail -->
-                  <path d="M24 55 Q12 45 10 38 Q18 48 24 50 Z" fill="white" opacity="0.85"/>
-                  <path d="M24 55 Q12 65 10 72 Q18 62 24 60 Z" fill="white" opacity="0.85"/>
-                  <!-- Dorsal fin -->
-                  <path d="M50 41 Q55 25 65 28 Q58 35 55 41 Z" fill="white" opacity="0.85"/>
-                  <!-- Eye -->
-                  <circle cx="78" cy="49" r="2" fill="#2a6a96"/>
-                  <!-- Wave -->
-                  <path d="M15 72 Q30 66 45 70 Q60 74 75 68 Q85 64 92 68" stroke="rgba(255,255,255,0.4)" stroke-width="2" fill="none"/>
-                </svg>
-            </div>
             <div class="logo-text">Dewgram</div>
         </div>
     </div>
@@ -149,9 +130,25 @@ def register():
     <div style="padding:12px 12px 30px">
         <div style="background:#f5f5f5;border:1px solid #d0d0d0;border-radius:4px;display:flex;overflow:hidden;margin-bottom:12px;">
             <div style="width:88px;border-right:1px solid #d0d0d0;display:flex;align-items:center;justify-content:center;background:#eaeaea;">
-                <label for="avatar_upload" class="photo-box">
-                    <i class="fa-regular fa-user"></i><span>PHOTO</span>
-                    <input type="file" id="avatar_upload" name="avatar" accept="image/*" style="display:none">
+                <label for="avatar_upload" class="photo-box" id="photo_label">
+                    <img id="avatar_preview" src="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:4px;position:absolute;top:0;left:0;">
+                    <i class="fa-regular fa-user" id="avatar_icon"></i>
+                    <span id="avatar_txt">PHOTO</span>
+                    <input type="file" id="avatar_upload" name="avatar" accept="image/*" style="display:none"
+                           onchange="
+                               var f=this.files[0];
+                               if(f){
+                                   var r=new FileReader();
+                                   r.onload=function(e){
+                                       document.getElementById('avatar_preview').src=e.target.result;
+                                       document.getElementById('avatar_preview').style.display='block';
+                                       document.getElementById('avatar_icon').style.display='none';
+                                       document.getElementById('avatar_txt').style.display='none';
+                                       document.getElementById('photo_label').style.position='relative';
+                                       document.getElementById('photo_label').style.overflow='hidden';
+                                   };
+                                   r.readAsDataURL(f);
+                               }">
                 </label>
             </div>
             <div style="flex:1;">
@@ -277,7 +274,17 @@ def login():
         <span style="color:white;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.04em;">Sign In</span>
     </div>
     <div style="padding:28px 16px 20px">
-        <div class="insta-cam"><i class="fa-brands fa-instagram" style="font-size:26px;color:#888;"></i></div>
+        <div style="text-align:center;margin:0 auto 18px;">
+            <div style="display:inline-flex;align-items:center;justify-content:center;width:60px;height:60px;border-radius:16px;background:linear-gradient(135deg,#4a8db7,#2a6a96);box-shadow:0 4px 14px rgba(42,106,150,.4);">
+                <svg viewBox="0 0 40 40" width="34" height="34" xmlns="http://www.w3.org/2000/svg">
+                  <!-- D letter stylized -->
+                  <path d="M8 8 L8 32 L18 32 Q30 32 30 20 Q30 8 18 8 Z" fill="none" stroke="white" stroke-width="3" stroke-linejoin="round"/>
+                  <path d="M8 20 L22 20" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+                  <!-- dot -->
+                  <circle cx="32" cy="10" r="2.5" fill="white"/>
+                </svg>
+            </div>
+        </div>
         <form method="post" style="margin-bottom:14px">
             <div class="field-card">
                 <div class="field-row"><i class="fa-regular fa-user field-icon"></i><input name="username" placeholder="Username or Email" autocomplete="off" required class="field-input"></div>

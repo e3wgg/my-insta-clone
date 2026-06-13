@@ -3,7 +3,7 @@ from flask_login import current_user
 from models import Notification, Message
 
 
-def get_layout(content_html, active_tab='', title='dewgram', dots_link=None):
+def get_layout(content_html, active_tab='', title='Dewgram', dots_link=None, back_arrow=None):
     unread_notif_badge = ''
     unread_dm_badge    = ''
     try:
@@ -56,12 +56,16 @@ def get_layout(content_html, active_tab='', title='dewgram', dots_link=None):
     <body class="pb-16 max-w-md mx-auto bg-[#edeff1] min-h-screen relative shadow-md">
 
         <header class="insta-header sticky top-0 z-50 text-white h-11 flex items-center justify-between px-3">
-            {'<a href="javascript:history.back()" class="text-white text-base opacity-80"><i class="fa-solid fa-chevron-left"></i></a>' if active_tab == 'profile' and title != 'dewgram' else '<span style="width:28px;"></span>'}
-            <span class="{'text-base font-bold uppercase tracking-wide' if active_tab == 'profile' and title != 'dewgram' else 'text-2xl insta-logo-font'} text-center flex-1">{title}</span>
+            {back_arrow if back_arrow is not None else (
+                '<a href="javascript:history.back()" class="text-white text-base opacity-80"><i class="fa-solid fa-chevron-left"></i></a>'
+                if active_tab == 'profile' and title != 'Dewgram'
+                else '<span style="width:28px;"></span>'
+            )}
+            <span class="{'text-base font-bold uppercase tracking-wide' if active_tab == 'profile' and title != 'Dewgram' else 'text-2xl insta-logo-font'} text-center flex-1">{title}</span>
             <div class="flex items-center justify-end" style="width:36px;">
                 {dots_link if dots_link else (
                     '<a href="/settings" class="text-white text-base"><i class="fa-solid fa-ellipsis-vertical"></i></a>'
-                    if active_tab == "profile" and title != "dewgram"
+                    if active_tab == "profile" and title != "Dewgram"
                     else f'<a href="/messages" class="text-white text-lg" style="position:relative;display:inline-flex;align-items:center;justify-content:center;"><i class="fa-regular fa-paper-plane"></i>{unread_dm_badge}</a>'
                 )}
             </div>

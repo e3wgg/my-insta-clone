@@ -533,13 +533,16 @@ def admin_unban(uid):
 @admin_bp.route(f"/{ADMIN_SECRET_PATH}/delete-user/<int:uid>")
 @admin_required
 def admin_delete_user(uid):
+    from cloudinary_helper import delete_file
     u = User.query.get_or_404(uid)
-    if u.avatar_filename:
-        try: os.remove(os.path.join(current_app.config['UPLOAD_FOLDER'], u.avatar_filename))
+    # Delete avatar from Cloudinary
+    if u.avatar_public_id:
+        try: delete_file(u.avatar_public_id, "image")
         except: pass
+    # Delete all posts from Cloudinary
     for p in u.posts:
-        if p.image_filename:
-            try: os.remove(os.path.join(current_app.config['UPLOAD_FOLDER'], p.image_filename))
+        if p.image_public_id:
+            try: delete_file(p.image_public_id, p.resource_type or "image")
             except: pass
     db.session.delete(u)
     db.session.commit()
@@ -558,10 +561,10 @@ def admin_reset_password(uid):
 @admin_bp.route(f"/{ADMIN_SECRET_PATH}/delete-post/<int:pid>", methods=["POST"])
 @admin_required
 def admin_delete_post(pid):
-    # from flask import jsonify
+    from cloudinary_helper import delete_file
     p = Post.query.get_or_404(pid)
-    if p.image_filename:
-        try: os.remove(os.path.join(current_app.config['UPLOAD_FOLDER'], p.image_filename))
+    if p.image_public_id:
+        try: delete_file(p.image_public_id, p.resource_type or "image")
         except: pass
     db.session.delete(p)
     db.session.commit()
