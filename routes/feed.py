@@ -4,7 +4,7 @@ from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from datetime import datetime, timezone
 from extensions import db
-from models import Post, Comment, Notification, User
+from models import Post, Comment, Notification, User, SavedPost
 from layout import get_layout
 
 feed = Blueprint('feed', __name__)
@@ -223,13 +223,14 @@ def create_post():
 @feed.route("/save/<int:post_id>")
 @login_required
 def save_post(post_id):
-    from models import SavedPost
     post = Post.query.get_or_404(post_id)
     existing = SavedPost.query.filter_by(user_id=current_user.id, post_id=post_id).first()
     if existing:
         db.session.delete(existing)
+        msg = "unsaved"
     else:
         db.session.add(SavedPost(user_id=current_user.id, post_id=post_id))
+        msg = "saved"
     db.session.commit()
     return redirect(request.referrer or url_for('feed.view_post', post_id=post_id))
 
@@ -240,11 +241,18 @@ def delete_post(post_id):
     post = Post.query.get_or_404(post_id)
     if post.user_id != current_user.id and not current_user.is_admin:
         return redirect(url_for('feed.feed_view'))
+    owner_username = post.author.username
+    # Delete from Cloudinary
     if post.image_public_id:
-        from cloudinary_helper import delete_file
-        delete_file(post.image_public_id, post.resource_type or "image")
+        try:
+            from cloudinary_helper import delete_file
+            delete_file(post.image_public_id, post.resource_type or "image")
+        except Exception as e:
+            print(f"Cloudinary delete error: {e}")
     db.session.delete(post)
     db.session.commit()
+    if current_user.is_admin and owner_username != current_user.username:
+        return redirect(url_for('profile.profile_view', username=owner_username))
     return redirect(url_for('profile.profile_view', username=current_user.username))
 
 
