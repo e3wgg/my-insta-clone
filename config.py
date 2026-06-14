@@ -39,7 +39,7 @@ MAX_ATTEMPTS       = 5
 LOCKOUT_SECS       = 300
 
 # ── SMTP Email ────────────────────────────────────────────────
-SMTP_HOST = "mail.gmail.com"       # غيّر لـ SMTP server الخاص بك
+SMTP_HOST = "smtp.gmail.com"       # غيّر لـ SMTP server الخاص بك
 SMTP_PORT = 465                   # SSL port
 SMTP_USER = "vb.oq911@gmail.com"    # البريد المرسل
 SMTP_PASS = "asdyam911"           # ← ضع كلمة سر البريد هنا
