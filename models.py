@@ -16,15 +16,19 @@ class User(UserMixin, db.Model):
     id              = db.Column(db.Integer, primary_key=True)
     username        = db.Column(db.String(50), unique=True, nullable=False)
     password_hash   = db.Column(db.String(255), nullable=False)
-    avatar_filename = db.Column(db.String(255), nullable=True)   # legacy
-    avatar_url      = db.Column(db.String(500), nullable=True)   # Cloudinary URL
-    avatar_public_id= db.Column(db.String(255), nullable=True)   # Cloudinary public_id
+    avatar_filename = db.Column(db.String(255), nullable=True)
+    avatar_url      = db.Column(db.String(500), nullable=True)
+    avatar_public_id= db.Column(db.String(255), nullable=True)
     bio             = db.Column(db.String(150), nullable=True)
     email           = db.Column(db.String(150), nullable=True)
     email_verified  = db.Column(db.Boolean, default=False)
     verify_token    = db.Column(db.String(64), nullable=True)
+    email_otp       = db.Column(db.String(6),  nullable=True)   # 4-digit OTP
+    otp_expires_at  = db.Column(db.DateTime,   nullable=True)   # OTP expiry
     is_banned       = db.Column(db.Boolean, default=False)
     is_admin        = db.Column(db.Boolean, default=False)
+    is_private      = db.Column(db.Boolean, default=False)      # private account
+    saves_public    = db.Column(db.Boolean, default=True)       # saved posts visible
     created_at      = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     followed = db.relationship(

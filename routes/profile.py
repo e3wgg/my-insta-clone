@@ -22,8 +22,16 @@ def profile_view(username):
     following_count = user.followed.count()
     followers_list  = user.followers.all()
     following_list  = user.followed.all()
-    saved_posts     = SavedPost.query.filter_by(user_id=user.id)\
-                        .order_by(SavedPost.created_at.desc()).all() if is_me else []
+
+    # Privacy checks
+    is_follower  = current_user.is_following(user)
+    can_see_all  = is_me or is_follower or current_user.is_admin or not getattr(user, 'is_private', False)
+    can_see_saves = is_me or (can_see_all and getattr(user, 'saves_public', True))
+
+    saved_posts = []
+    if can_see_saves and active_tab_p == 'saved':
+        saved_posts = SavedPost.query.filter_by(user_id=user.id)\
+                        .order_by(SavedPost.created_at.desc()).all()
 
     # ── Three-dots menu ──────────────────────────────────────
     if is_me:
@@ -69,11 +77,19 @@ def profile_view(username):
                 {% endif %}
                 <div style="flex:1;display:flex;justify-content:space-around;text-align:center;">
                     <div><div style="font-size:18px;font-weight:700;color:#222;">{{ posts_count }}</div><div style="font-size:11px;color:#888;">posts</div></div>
+                    {% if can_see_all %}
                     <a href="?list=followers" style="text-decoration:none;"><div style="font-size:18px;font-weight:700;color:#222;">{{ followers_count }}</div><div style="font-size:11px;color:#888;">followers</div></a>
                     <a href="?list=following" style="text-decoration:none;"><div style="font-size:18px;font-weight:700;color:#222;">{{ following_count }}</div><div style="font-size:11px;color:#888;">following</div></a>
+                    {% else %}
+                    <div><div style="font-size:18px;font-weight:700;color:#ccc;">—</div><div style="font-size:11px;color:#aaa;">followers</div></div>
+                    <div><div style="font-size:18px;font-weight:700;color:#ccc;">—</div><div style="font-size:11px;color:#aaa;">following</div></div>
+                    {% endif %}
                 </div>
             </div>
-            <div style="margin-top:10px;font-size:13px;font-weight:700;color:#222;">{{ user.bio or user.username }}</div>
+            <div style="margin-top:10px;display:flex;align-items:center;gap:6px;">
+                <span style="font-size:13px;font-weight:700;color:#222;">{{ user.bio or user.username }}</span>
+                {% if user.is_private %}<i class="fa-solid fa-lock" style="font-size:11px;color:#888;" title="Private account"></i>{% endif %}
+            </div>
 
             <!-- Action buttons -->
             <div style="margin-top:10px;display:flex;gap:8px;">
@@ -95,11 +111,17 @@ def profile_view(username):
 
         <!-- Blocked state -->
         {% if i_block or they_block %}
-        <div style="padding:50px 20px;text-align:center;color:#aaa;">
+        <div style="padding:50px 20px;text-align:center;">
             <i class="fa-solid fa-ban" style="font-size:44px;color:#e74c3c;margin-bottom:14px;display:block;"></i>
-            <div style="font-size:14px;font-weight:700;color:#555;">
-                {% if i_block %}You blocked this user.{% else %}This content is unavailable.{% endif %}
-            </div>
+            <div style="font-size:14px;font-weight:700;color:#555;">{% if i_block %}You blocked this user.{% else %}Content unavailable.{% endif %}</div>
+        </div>
+
+        <!-- Private account — not following -->
+        {% elif user.is_private and not can_see_all %}
+        <div style="padding:50px 20px;text-align:center;color:#aaa;">
+            <i class="fa-solid fa-lock" style="font-size:44px;color:#4a8db7;margin-bottom:14px;display:block;"></i>
+            <div style="font-size:15px;font-weight:700;color:#555;margin-bottom:6px;">This account is private</div>
+            <div style="font-size:13px;color:#888;">Follow this account to see their photos and videos.</div>
         </div>
 
         {% else %}
@@ -107,9 +129,7 @@ def profile_view(username):
         <!-- Followers/Following list -->
         {% if show_list %}
         <div style="background:#f0f0f0;border-bottom:1px solid #ddd;padding:8px 16px;display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;">
-                {% if show_list == 'followers' %}Followed By{% else %}Following{% endif %}
-            </span>
+            <span style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;">{% if show_list == 'followers' %}Followed By{% else %}Following{% endif %}</span>
             <a href="{{ url_for('profile.profile_view', username=user.username) }}" style="color:#e44;font-weight:700;font-size:13px;text-decoration:none;">✕</a>
         </div>
         <div style="max-height:200px;overflow-y:auto;background:#fafafa;border-bottom:1px solid #ddd;">
@@ -133,13 +153,13 @@ def profile_view(username):
         </div>
         {% endif %}
 
-        <!-- Tabs: Posts / Saved (only for own profile) -->
+        <!-- Tabs -->
         <div style="display:flex;border-bottom:1px solid #e0e0e0;background:#fff;">
             <a href="?tab=posts" style="flex:1;display:flex;align-items:center;justify-content:center;padding:11px 0;text-decoration:none;
                border-bottom:{% if active_tab_p != 'saved' %}2px solid #3897f0{% else %}2px solid transparent{% endif %};">
                 <i class="fa-solid fa-grip" style="font-size:18px;color:{% if active_tab_p != 'saved' %}#3897f0{% else %}#bbb{% endif %};"></i>
             </a>
-            {% if user.id == current_user.id %}
+            {% if user.id == current_user.id or can_see_saves %}
             <a href="?tab=saved" style="flex:1;display:flex;align-items:center;justify-content:center;padding:11px 0;text-decoration:none;
                border-bottom:{% if active_tab_p == 'saved' %}2px solid #3897f0{% else %}2px solid transparent{% endif %};">
                 <i class="fa-regular fa-bookmark" style="font-size:18px;color:{% if active_tab_p == 'saved' %}#3897f0{% else %}#bbb{% endif %};"></i>
@@ -160,7 +180,7 @@ def profile_view(username):
                                 <i class="fa-solid fa-play" style="font-size:9px;color:white;"></i>
                             </div>
                         {% else %}
-                            <img src="{{ post.image_url }}" style="width:100%;height:100%;object-fit:cover;">
+                            <img src="{{ post.image_url }}" style="width:100%;height:100%;object-fit:cover;" loading="lazy">
                         {% endif %}
                     {% else %}
                         <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;color:#aaa;padding:4px;text-align:center;">{{ post.content[:20] if post.content else '' }}</div>
@@ -182,40 +202,41 @@ def profile_view(username):
 
         <!-- Saved grid -->
         {% else %}
+        {% if not can_see_saves %}
+        <div style="padding:40px;text-align:center;color:#aaa;font-size:13px;">
+            <i class="fa-solid fa-lock" style="font-size:36px;display:block;margin-bottom:10px;color:#ccc;"></i>Saved posts are private.
+        </div>
+        {% else %}
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:2px;">
             {% for sp in saved_posts %}
             <a href="{{ url_for('feed.view_post', post_id=sp.post.id) }}" style="aspect-ratio:1;display:block;overflow:hidden;background:#ddd;position:relative;">
                 {% if sp.post.image_url %}
                     {% if sp.post.resource_type == 'video' %}
                         <video src="{{ sp.post.image_url }}" style="width:100%;height:100%;object-fit:cover;" muted playsinline></video>
-                        <div style="position:absolute;top:4px;left:4px;background:rgba(0,0,0,.5);border-radius:3px;padding:2px 5px;">
-                            <i class="fa-solid fa-play" style="font-size:9px;color:white;"></i>
-                        </div>
+                        <div style="position:absolute;top:4px;left:4px;background:rgba(0,0,0,.5);border-radius:3px;padding:2px 5px;"><i class="fa-solid fa-play" style="font-size:9px;color:white;"></i></div>
                     {% else %}
-                        <img src="{{ sp.post.image_url }}" style="width:100%;height:100%;object-fit:cover;">
+                        <img src="{{ sp.post.image_url }}" style="width:100%;height:100%;object-fit:cover;" loading="lazy">
                     {% endif %}
                 {% else %}
-                    <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
-                        <i class="fa-regular fa-bookmark" style="font-size:24px;color:#ccc;"></i>
-                    </div>
+                    <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;"><i class="fa-regular fa-bookmark" style="font-size:24px;color:#ccc;"></i></div>
                 {% endif %}
             </a>
             {% else %}
             <div style="grid-column:1/-1;padding:40px;text-align:center;color:#aaa;font-size:13px;">
-                <i class="fa-regular fa-bookmark" style="font-size:36px;display:block;margin-bottom:10px;"></i>
-                No saved posts yet.
+                <i class="fa-regular fa-bookmark" style="font-size:36px;display:block;margin-bottom:10px;"></i>No saved posts yet.
             </div>
             {% endfor %}
         </div>
         {% endif %}
-
+        {% endif %}
         {% endif %}
     </div>
     """), user=user, current_user=current_user, posts_count=posts_count,
          followers_count=followers_count, following_count=following_count,
          followers_list=followers_list, following_list=following_list,
          show_list=show_list, i_block=i_block, they_block=they_block,
-         active_tab_p=active_tab_p, saved_posts=saved_posts)
+         active_tab_p=active_tab_p, saved_posts=saved_posts,
+         can_see_all=can_see_all, can_see_saves=can_see_saves)
 
 
 @profile.route("/notifications")

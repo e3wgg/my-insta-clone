@@ -72,6 +72,159 @@ def check_username():
     return {"available": not exists}
 
 
+def _send_otp_email(to_email, username, otp):
+    """Send 4-digit OTP via SMTP"""
+    try:
+        import smtplib
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        from config import SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM
+
+        html = f"""
+        <div style="font-family:-apple-system,sans-serif;max-width:420px;margin:0 auto;padding:30px 20px;">
+            <div style="text-align:center;margin-bottom:24px;">
+                <h1 style="font-size:28px;font-weight:800;color:#4a8db7;margin:0;">Dewgram</h1>
+            </div>
+            <div style="background:#f9f9f9;border-radius:10px;padding:28px 24px;text-align:center;border:1px solid #e0e0e0;">
+                <i style="font-size:36px;">✉️</i>
+                <h2 style="font-size:18px;color:#222;margin:14px 0 8px;">Verify Your Email</h2>
+                <p style="font-size:14px;color:#666;margin-bottom:24px;">Hi <strong>@{username}</strong>, use this code to verify your account:</p>
+                <div style="background:#fff;border:2px solid #4a8db7;border-radius:8px;padding:18px;display:inline-block;margin-bottom:24px;">
+                    <span style="font-size:38px;font-weight:800;color:#4a8db7;letter-spacing:12px;">{otp}</span>
+                </div>
+                <p style="font-size:12px;color:#aaa;">This code expires in <strong>10 minutes</strong>.</p>
+                <p style="font-size:12px;color:#aaa;">If you didn't create a Dewgram account, ignore this email.</p>
+            </div>
+        </div>
+        """
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"Your Dewgram verification code: {otp}"
+        msg["From"]    = SMTP_FROM
+        msg["To"]      = to_email
+        msg.attach(MIMEText(html, "html"))
+
+        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
+            server.login(SMTP_USER, SMTP_PASS)
+            server.sendmail(SMTP_FROM, to_email, msg.as_string())
+        print(f"✅ OTP sent to {to_email}")
+    except Exception as e:
+        print(f"❌ Email error: {e}")
+
+
+@auth.route("/verify-otp", methods=["GET","POST"])
+def verify_otp():
+    from flask import session as flask_session
+    from datetime import datetime, timezone
+    uid = flask_session.get('pending_user_id')
+    if not uid:
+        return redirect(url_for('auth.register'))
+
+    user = User.query.get(uid)
+    if not user:
+        return redirect(url_for('auth.register'))
+
+    error = None
+    if request.method == "POST":
+        entered = request.form.get("otp","").strip()
+        now = datetime.now(timezone.utc)
+        exp = user.otp_expires_at
+        if exp and exp.tzinfo is None:
+            from datetime import timezone as tz
+            exp = exp.replace(tzinfo=tz.utc)
+
+        if not user.email_otp:
+            error = "OTP expired. Please register again."
+        elif now > exp:
+            error = "Code expired. Please register again."
+        elif entered != user.email_otp:
+            error = "Wrong code. Please try again."
+        else:
+            user.email_verified = True
+            user.email_otp      = None
+            user.otp_expires_at = None
+            db.session.commit()
+            flask_session.pop('pending_user_id', None)
+            login_user(user)
+            return redirect(url_for('feed.feed_view'))
+
+    return render_template_string("""
+    <!DOCTYPE html><html><head><meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{background:#d0d3d6;font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;max-width:480px;margin:0 auto;}
+        .card{background:white;border-radius:12px;padding:36px 28px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.12);width:100%;max-width:360px;}
+        .icon{font-size:48px;margin-bottom:12px}
+        h2{font-size:20px;font-weight:800;color:#222;margin-bottom:6px}
+        p{font-size:13px;color:#666;margin-bottom:6px}
+        .email{font-weight:700;color:#333;font-size:14px;margin-bottom:24px;display:block}
+        .otp-inputs{display:flex;gap:10px;justify-content:center;margin-bottom:20px}
+        .otp-inputs input{width:56px;height:64px;text-align:center;font-size:28px;font-weight:800;border:2px solid #ddd;border-radius:8px;outline:none;color:#333;background:#fafafa;}
+        .otp-inputs input:focus{border-color:#4a8db7;background:#fff}
+        .btn{width:100%;padding:14px;background:linear-gradient(to bottom,#7bc96f,#5aab4e);color:white;font-weight:700;font-size:15px;border:none;border-radius:6px;cursor:pointer;margin-bottom:12px}
+        .resend{color:#4a8db7;font-size:13px;text-decoration:none;display:block}
+        .err{background:#ffe0e0;border:1px solid #f5c0c0;border-radius:6px;padding:10px 14px;font-size:12px;color:#c0392b;margin-bottom:14px}
+    </style></head><body>
+    <div class="card">
+        <div class="icon">✉️</div>
+        <h2>Check Your Email</h2>
+        <p>We sent a 4-digit code to</p>
+        <span class="email">{{ user.email }}</span>
+        {% if error %}<div class="err"><i class="fa-solid fa-circle-exclamation" style="margin-right:6px;"></i>{{ error }}</div>{% endif %}
+        <form method="post" id="otpForm">
+            <div class="otp-inputs">
+                <input type="text" maxlength="1" id="o1" name="d1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="text" maxlength="1" id="o2" name="d2" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="text" maxlength="1" id="o3" name="d3" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="text" maxlength="1" id="o4" name="d4" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+            </div>
+            <input type="hidden" name="otp" id="hiddenOtp">
+            <button type="submit" class="btn">Confirm Code</button>
+        </form>
+        <a href="/resend-otp" class="resend">Didn't receive it? Resend code</a>
+    </div>
+    <script>
+        const inputs=[document.getElementById('o1'),document.getElementById('o2'),document.getElementById('o3'),document.getElementById('o4')];
+        inputs.forEach((inp,i)=>{
+            inp.addEventListener('input',function(){
+                this.value=this.value.replace(/[^0-9]/g,'');
+                if(this.value && i<3) inputs[i+1].focus();
+                updateHidden();
+            });
+            inp.addEventListener('keydown',function(e){
+                if(e.key==='Backspace' && !this.value && i>0) inputs[i-1].focus();
+            });
+        });
+        function updateHidden(){
+            document.getElementById('hiddenOtp').value=inputs.map(i=>i.value).join('');
+        }
+        document.getElementById('otpForm').addEventListener('submit',function(){updateHidden();});
+        inputs[0].focus();
+    </script>
+    </body></html>
+    """, user=user, error=error)
+
+
+@auth.route("/resend-otp")
+def resend_otp():
+    from flask import session as flask_session
+    import random
+    from datetime import datetime, timezone, timedelta
+    uid = flask_session.get('pending_user_id')
+    if not uid:
+        return redirect(url_for('auth.register'))
+    user = User.query.get(uid)
+    if not user:
+        return redirect(url_for('auth.register'))
+    otp = str(random.randint(1000, 9999))
+    user.email_otp     = otp
+    user.otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    db.session.commit()
+    _send_otp_email(user.email, user.username, otp)
+    return redirect(url_for('auth.verify_otp'))
+
+
 @auth.route("/register", methods=["GET","POST"])
 def register():
     if current_user.is_authenticated:
@@ -81,16 +234,26 @@ def register():
         password  = request.form["password"]
         full_name = request.form.get("full_name","").strip()
         email     = request.form.get("email","").strip().lower()
+
+        if not email:
+            return redirect(url_for('auth.register'))
         if User.query.filter_by(username=username).first():
             return redirect(url_for('auth.register'))
+
+        import random
+        from datetime import datetime, timezone, timedelta
+        otp = str(random.randint(1000, 9999))
+        expires = datetime.now(timezone.utc) + timedelta(minutes=10)
+
         token = secrets.token_urlsafe(32)
-        user  = User(username=username, password_hash=generate_password_hash(password), verify_token=token)
+        user  = User(username=username, password_hash=generate_password_hash(password),
+                     verify_token=token, email=email,
+                     email_otp=otp, otp_expires_at=expires)
         if full_name: user.bio = full_name
-        if email:     user.email = email
         db.session.add(user)
         db.session.commit()
-        login_user(user)
-        # Upload avatar to Cloudinary if provided
+
+        # Upload avatar
         file = request.files.get("avatar")
         if file and file.filename:
             from cloudinary_helper import upload_file
@@ -99,9 +262,14 @@ def register():
                 user.avatar_url       = result["url"]
                 user.avatar_public_id = result["public_id"]
                 db.session.commit()
-        if email and not user.email_verified:
-            return redirect(url_for('auth.verify_pending'))
-        return redirect(url_for('feed.feed_view'))
+
+        # Send OTP email
+        _send_otp_email(email, username, otp)
+
+        # Store user_id in session for OTP verification
+        from flask import session as flask_session
+        flask_session['pending_user_id'] = user.id
+        return redirect(url_for('auth.verify_otp'))
 
     return render_template_string("""
     <!DOCTYPE html><html><head><meta charset="UTF-8">
@@ -467,6 +635,7 @@ def settings():
         <div style="border:1px solid #d0d0d0;border-radius:4px;overflow:hidden;margin-bottom:14px">
             <a href="/edit-profile" class="row"><div class="rl"><i class="fa-regular fa-user ri"></i>Edit Profile</div><i class="fa-solid fa-chevron-right" style="color:#bbb;font-size:12px"></i></a>
             <a href="/change-password" class="row"><div class="rl"><i class="fa-solid fa-lock ri"></i>Change Password</div><i class="fa-solid fa-chevron-right" style="color:#bbb;font-size:12px"></i></a>
+            <a href="/privacy" class="row"><div class="rl"><i class="fa-solid fa-shield-halved ri"></i>Privacy</div><i class="fa-solid fa-chevron-right" style="color:#bbb;font-size:12px"></i></a>
             {% if current_user.email %}
             <div class="row" style="cursor:default">
                 <div class="rl"><i class="fa-regular fa-envelope ri"></i><span>{{ current_user.email }}</span></div>
@@ -477,9 +646,62 @@ def settings():
         <div class="sec">Support</div>
         <div style="border:1px solid #d0d0d0;border-radius:4px;overflow:hidden;margin-bottom:14px">
             <a href="/support" class="row"><div class="rl"><i class="fa-regular fa-circle-question ri"></i>Help & Support</div><i class="fa-solid fa-chevron-right" style="color:#bbb;font-size:12px"></i></a>
-            <div class="row" style="cursor:default"><div class="rl"><i class="fa-solid fa-shield ri"></i>Privacy Policy</div><i class="fa-solid fa-chevron-right" style="color:#bbb;font-size:12px"></i></div>
         </div>
         <div style="border:1px solid #f5c0c0;border-radius:4px;overflow:hidden">
             <a href="/logout" class="row" style="color:#e74c3c"><div class="rl" style="color:#e74c3c"><i class="fa-solid fa-right-from-bracket ri" style="color:#e74c3c"></i>Log Out</div></a>
         </div>
     </div></body></html>""", current_user=current_user)
+
+
+@auth.route("/privacy", methods=["GET","POST"])
+@login_required
+def privacy():
+    if request.method == "POST":
+        current_user.is_private   = 'is_private'   in request.form
+        current_user.saves_public = 'saves_private' not in request.form
+        db.session.commit()
+    return render_template_string("""
+    <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        *{box-sizing:border-box;margin:0;padding:0}body{background:#d8dadb;font-family:-apple-system,sans-serif;max-width:480px;margin:0 auto}
+        .hdr{background:linear-gradient(to bottom,#4a8db7,#2a6a96);display:flex;align-items:center;height:48px;padding:0 14px;position:sticky;top:0}
+        .hdr a{color:white;font-size:17px;margin-right:14px;text-decoration:none}
+        .hdr span{color:white;font-weight:700;font-size:15px;text-transform:uppercase}
+        .card{background:white;border:1px solid #d0d0d0;border-radius:6px;margin:14px;overflow:hidden}
+        .prow{display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid #f0f0f0}
+        .prow:last-child{border-bottom:none}
+        .ptitle{font-size:14px;font-weight:600;color:#222;margin-bottom:2px}
+        .pdesc{font-size:11px;color:#888;line-height:1.4}
+        .toggle{position:relative;width:46px;height:26px;flex-shrink:0;margin-left:12px}
+        .toggle input{opacity:0;width:0;height:0}
+        .slider{position:absolute;inset:0;background:#ccc;border-radius:26px;cursor:pointer;transition:.3s}
+        .slider:before{content:"";position:absolute;height:20px;width:20px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s}
+        input:checked+.slider{background:#4a8db7}
+        input:checked+.slider:before{transform:translateX(20px)}
+        .saved-banner{background:#e8f4fd;border:1px solid #b3d9f7;border-radius:6px;padding:10px 14px;margin:14px 14px 0;font-size:12px;color:#1a6a9a;{% if request.method != 'POST' %}display:none;{% endif %}}
+    </style></head><body>
+    <div class="hdr">
+        <a href="/settings"><i class="fa-solid fa-chevron-left"></i></a>
+        <span>Privacy</span>
+    </div>
+    <div class="saved-banner"><i class="fa-solid fa-circle-check" style="margin-right:6px;"></i>Settings saved!</div>
+    <form method="post">
+        <div style="padding:14px 14px 0;font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;">Account</div>
+        <div class="card">
+            <div class="prow">
+                <div><div class="ptitle"><i class="fa-solid fa-lock" style="color:#4a8db7;margin-right:6px;font-size:13px;"></i>Private Account</div>
+                <div class="pdesc">Only your followers can see your posts, following list, and saved posts.</div></div>
+                <label class="toggle"><input type="checkbox" name="is_private" {% if current_user.is_private %}checked{% endif %} onchange="this.form.submit()"><span class="slider"></span></label>
+            </div>
+        </div>
+        <div style="padding:0 14px;font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;">Saved Posts</div>
+        <div class="card">
+            <div class="prow">
+                <div><div class="ptitle"><i class="fa-regular fa-bookmark" style="color:#4a8db7;margin-right:6px;font-size:13px;"></i>Private Saved Posts</div>
+                <div class="pdesc">When ON, only you can see your saved posts tab.</div></div>
+                <label class="toggle"><input type="checkbox" name="saves_private" {% if not current_user.saves_public %}checked{% endif %} onchange="this.form.submit()"><span class="slider"></span></label>
+            </div>
+        </div>
+    </form>
+    </body></html>""", current_user=current_user, request=request)

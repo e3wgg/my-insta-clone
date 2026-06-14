@@ -43,26 +43,36 @@ from models import User  # noqa: F401  (imports all models transitively)
 def load_user(user_id):
     try:
         user = db.session.get(User, int(user_id))
-        if user and user.is_banned:
-            return None  # طرده فوراً
+        if user and getattr(user, 'is_banned', False):
+            return None
         return user
     except Exception:
         try:
-            from sqlalchemy import text, inspect
-            inspector = inspect(db.engine)
-            cols = [c['name'] for c in inspector.get_columns('user')]
+            from sqlalchemy import text
             with db.engine.connect() as conn:
-                for col, typ in [('email','VARCHAR(150)'), ('email_verified','BOOLEAN DEFAULT 0'),
-                                  ('verify_token','VARCHAR(64)'), ('is_banned','BOOLEAN DEFAULT 0'),
-                                  ('is_admin','BOOLEAN DEFAULT 0')]:
-                    if col not in cols:
-                        conn.execute(text(f"ALTER TABLE user ADD COLUMN {col} {typ}"))
+                new_cols = [
+                    ('email',           'VARCHAR(150)'),
+                    ('email_verified',  'BOOLEAN DEFAULT FALSE'),
+                    ('verify_token',    'VARCHAR(64)'),
+                    ('is_banned',       'BOOLEAN DEFAULT FALSE'),
+                    ('is_admin',        'BOOLEAN DEFAULT FALSE'),
+                    ('email_otp',       'VARCHAR(6)'),
+                    ('otp_expires_at',  'TIMESTAMP'),
+                    ('is_private',      'BOOLEAN DEFAULT FALSE'),
+                    ('saves_public',    'BOOLEAN DEFAULT TRUE'),
+                    ('avatar_url',      'VARCHAR(500)'),
+                    ('avatar_public_id','VARCHAR(255)'),
+                ]
+                for col, typ in new_cols:
+                    conn.execute(text(f'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS {col} {typ}'))
                 conn.commit()
+            db.session.expire_all()
             user = db.session.get(User, int(user_id))
-            if user and user.is_banned:
+            if user and getattr(user, 'is_banned', False):
                 return None
             return user
-        except Exception:
+        except Exception as e:
+            print(f"load_user error: {e}")
             return None
 
 # ── Register blueprints ──────────────────────────────────────
@@ -87,6 +97,29 @@ app.register_blueprint(admin_bp)
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
-        print("✅ Tables created/verified on Supabase")
+        # Auto-migrate new columns
+        try:
+            from sqlalchemy import text, inspect
+            inspector = inspect(db.engine)
+            tables = inspector.get_table_names()
+            if 'user' in tables:
+                u_cols = [c['name'] for c in inspector.get_columns('user')]
+                with db.engine.connect() as conn:
+                    new_cols = [
+                        ('email_otp',       'VARCHAR(6)'),
+                        ('otp_expires_at',  'TIMESTAMP'),
+                        ('is_private',      'BOOLEAN DEFAULT FALSE'),
+                        ('saves_public',    'BOOLEAN DEFAULT TRUE'),
+                        ('avatar_url',      'VARCHAR(500)'),
+                        ('avatar_public_id','VARCHAR(255)'),
+                    ]
+                    for col, typ in new_cols:
+                        if col not in u_cols:
+                            conn.execute(text(f'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS {col} {typ}'))
+                            print(f"✅ Added user.{col}")
+                    conn.commit()
+        except Exception as e:
+            print(f"Migration note: {e}")
+        print("✅ DB ready")
 
     app.run(host="0.0.0.0", port=5000, debug=True)

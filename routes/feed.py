@@ -21,7 +21,14 @@ def feed_view():
     blocked_ids = {b.blocked_id for b in current_user.blocking}
     blocker_ids = {b.blocker_id for b in current_user.blocked_by}
     hidden = blocked_ids | blocker_ids
-    posts = Post.query.filter(~Post.user_id.in_(hidden)).order_by(Post.created_at.desc()).all()
+    try:
+        from sqlalchemy.orm import joinedload
+        q = Post.query.options(joinedload(Post.author), joinedload(Post.likes))
+        if hidden:
+            q = q.filter(~Post.user_id.in_(hidden))
+        posts = q.order_by(Post.created_at.desc()).limit(30).all()
+    except Exception:
+        posts = Post.query.order_by(Post.created_at.desc()).limit(30).all()
 
     content_html = """
     <div class="mt-0 space-y-0 pb-20">
@@ -30,7 +37,7 @@ def feed_view():
             <div class="flex items-center justify-between px-3 py-2 border-b border-gray-100">
                 <div class="flex items-center space-x-2">
                     {% if post.author.avatar_url %}
-                        <img src="{{ post.author.avatar_url }}" class="w-8 h-8 rounded-full object-cover border border-gray-300">
+                        <img src="{{ post.author.avatar_url }}" class="w-8 h-8 rounded-full object-cover border border-gray-300" loading="lazy">
                     {% elif post.author.avatar_filename %}
                         <img src="{{ url_for('feed.uploaded_file', filename=post.author.avatar_filename) }}" class="w-8 h-8 rounded-full object-cover border border-gray-300">
                     {% else %}
@@ -65,7 +72,7 @@ def feed_view():
                 {% if post.resource_type == 'video' %}
                     <video controls class="w-full" style="max-height:380px;"><source src="{{ post.image_url }}"></video>
                 {% else %}
-                    <img src="{{ post.image_url }}" class="w-full h-auto object-cover" style="max-height:380px;">
+                    <img src="{{ post.image_url }}" class="w-full h-auto object-cover" style="max-height:380px;" loading="lazy">
                 {% endif %}
             </a>
             {% endif %}
