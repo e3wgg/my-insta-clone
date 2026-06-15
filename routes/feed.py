@@ -48,19 +48,29 @@ def feed_view():
                         {% if post.author.bio %}<span class="text-[10px] text-gray-400">{{ post.author.bio }}</span>{% endif %}
                     </div>
                 </div>
-                <div style="position:relative;">
+                <div style="position:relative;flex-shrink:0;">
                     <button onclick="toggleMenu('pmenu_{{ post.id }}')"
-                            style="background:none;border:none;cursor:pointer;padding:4px 8px;font-size:16px;color:#888;">•••</button>
-                    <div id="pmenu_{{ post.id }}" style="display:none;position:absolute;right:0;top:28px;background:white;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.15);min-width:140px;z-index:50;overflow:hidden;">
+                            style="background:none;border:none;cursor:pointer;padding:6px 10px;font-size:18px;color:#aaa;line-height:1;">⋯</button>
+                    <div id="pmenu_{{ post.id }}"
+                         style="display:none;position:absolute;right:0;top:32px;background:white;border:1px solid #ddd;
+                                border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.15);min-width:150px;z-index:100;overflow:hidden;">
+                        <!-- Save -->
                         <a href="{{ url_for('feed.save_post', post_id=post.id) }}"
-                           style="display:flex;align-items:center;gap:10px;padding:12px 14px;font-size:13px;color:#333;text-decoration:none;border-bottom:1px solid #f0f0f0;">
-                            <i class="fa-regular fa-bookmark" style="color:#555;"></i> Save
+                           style="display:flex;align-items:center;gap:10px;padding:13px 16px;font-size:13px;
+                                  color:#333;text-decoration:none;border-bottom:1px solid #f5f5f5;">
+                            <i class="fa-regular fa-bookmark" style="width:16px;color:#4a8db7;"></i>
+                            Save
                         </a>
+                        <!-- Delete (only owner or admin) -->
                         {% if post.user_id == current_user.id or current_user.is_admin %}
-                        <form action="{{ url_for('feed.delete_post', post_id=post.id) }}" method="post"
-                              onsubmit="return confirm('Delete this post?')">
-                            <button type="submit" style="width:100%;display:flex;align-items:center;gap:10px;padding:12px 14px;font-size:13px;color:#e74c3c;background:none;border:none;cursor:pointer;text-align:left;">
-                                <i class="fa-regular fa-trash-can"></i> Delete
+                        <form method="post" action="{{ url_for('feed.delete_post', post_id=post.id) }}"
+                              onsubmit="return confirm('Delete this post?');"
+                              style="margin:0;padding:0;">
+                            <button type="submit"
+                                    style="width:100%;display:flex;align-items:center;gap:10px;padding:13px 16px;
+                                           font-size:13px;color:#e74c3c;background:none;border:none;cursor:pointer;">
+                                <i class="fa-regular fa-trash-can" style="width:16px;"></i>
+                                Delete
                             </button>
                         </form>
                         {% endif %}

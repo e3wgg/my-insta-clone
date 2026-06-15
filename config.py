@@ -32,15 +32,15 @@ MAX_CONTENT_LENGTH = 16 * 1024 * 1024
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'mp4', 'mov'}
 
 # ── Admin ────────────────────────────────────────────────────
-ADMIN_SECRET_PATH  = "almunif"
-ADMIN_PASSWORD     = "e3wg911"
+ADMIN_SECRET_PATH  = "x7k9m2p4q8"
+ADMIN_PASSWORD     = "Ch@ng3Me!2026"
 ADMIN_IP_WHITELIST = []
 MAX_ATTEMPTS       = 5
 LOCKOUT_SECS       = 300
 
 # ── SMTP Email ────────────────────────────────────────────────
-SMTP_HOST = "smtp.gmail.com"       # غيّر لـ SMTP server الخاص بك
+SMTP_HOST = "mail.e3wg.uk"       # غيّر لـ SMTP server الخاص بك
 SMTP_PORT = 465                   # SSL port
-SMTP_USER = "vb.oq911@gmail.com"    # البريد المرسل
-SMTP_PASS = "asdyam911"           # ← ضع كلمة سر البريد هنا
-SMTP_FROM = "Dewgram <vb.oq911@gmail.com>"
+SMTP_USER = "dewgram@e3wg.uk"    # البريد المرسل
+SMTP_PASS = "changeme"           # ← ضع كلمة سر البريد هنا
+SMTP_FROM = "Dewgram <dewgram@e3wg.uk>"

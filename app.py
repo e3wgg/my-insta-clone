@@ -1,11 +1,12 @@
 import os
-from flask import Flask
+from flask import Flask, request, redirect
+from flask_login import current_user, logout_user
 from extensions import db, login_manager
 from config import (SECRET_KEY, SQLALCHEMY_DATABASE_URI, SQLALCHEMY_TRACK_MODIFICATIONS,
                     UPLOAD_FOLDER, MAX_CONTENT_LENGTH, ADMIN_SECRET_PATH,
                     SQLALCHEMY_ENGINE_OPTIONS)
 
-# ── App factory ──────────────────────────────────────────────
+# ── App ──────────────────────────────────────────────────────
 app = Flask(__name__)
 app.config["SECRET_KEY"]                     = SECRET_KEY
 app.config["SQLALCHEMY_DATABASE_URI"]        = SQLALCHEMY_DATABASE_URI
@@ -19,26 +20,77 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 db.init_app(app)
 login_manager.init_app(app)
 
-# ── طرد المبنّد فوراً من أي صفحة ────────────────────────────
+# ── Models ───────────────────────────────────────────────────
+from models import User  # noqa — imports all models
+
+# ── DB Setup: run once on first request ──────────────────────
+_db_ready = False
+
+def _run_migrations():
+    """Create tables + add any missing columns — safe to run on PostgreSQL."""
+    from sqlalchemy import text
+    db.create_all()
+    with db.engine.connect() as conn:
+        # user table columns
+        for col, typ in [
+            ('email',            'VARCHAR(150)'),
+            ('email_verified',   'BOOLEAN DEFAULT FALSE'),
+            ('verify_token',     'VARCHAR(64)'),
+            ('is_banned',        'BOOLEAN DEFAULT FALSE'),
+            ('is_admin',         'BOOLEAN DEFAULT FALSE'),
+            ('is_private',       'BOOLEAN DEFAULT FALSE'),
+            ('saves_public',     'BOOLEAN DEFAULT TRUE'),
+            ('avatar_url',       'VARCHAR(500)'),
+            ('avatar_public_id', 'VARCHAR(255)'),
+            ('email_otp',        'VARCHAR(6)'),
+            ('otp_expires_at',   'TIMESTAMP'),
+        ]:
+            try:
+                conn.execute(text(
+                    f'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "{col}" {typ}'
+                ))
+            except Exception:
+                pass
+        # message table
+        for col, typ in [
+            ('image_url',        'VARCHAR(500)'),
+            ('image_public_id',  'VARCHAR(255)'),
+            ('resource_type',    'VARCHAR(10)'),
+            ('is_read',          'BOOLEAN DEFAULT FALSE'),
+        ]:
+            try:
+                conn.execute(text(
+                    f'ALTER TABLE message ADD COLUMN IF NOT EXISTS "{col}" {typ}'
+                ))
+            except Exception:
+                pass
+        conn.commit()
+    print("✅ DB migrations done")
+
+
+@app.before_request
+def setup_once():
+    global _db_ready
+    if not _db_ready:
+        try:
+            _run_migrations()
+            _db_ready = True
+        except Exception as e:
+            print(f"Migration error: {e}")
+
+# ── Ban check ─────────────────────────────────────────────────
 @app.before_request
 def check_banned():
-    from flask import request, redirect, url_for
-    from flask_login import current_user
-    # استثن صفحات تسجيل الدخول والدعم والأدمن
     excluded = ['/login', '/logout', '/welcome', '/support', '/static',
+                '/register', '/verify-otp', '/resend-otp',
                 f'/{ADMIN_SECRET_PATH}']
-    path = request.path
-    if any(path.startswith(e) for e in excluded):
+    if any(request.path.startswith(e) for e in excluded):
         return
-    if current_user.is_authenticated and current_user.is_banned:
-        from flask_login import logout_user
+    if current_user.is_authenticated and getattr(current_user, 'is_banned', False):
         logout_user()
         return redirect('/login?banned=1')
 
-# ── Import models (needed for db.create_all) ─────────────────
-from models import User  # noqa: F401  (imports all models transitively)
-
-# ── User loader ──────────────────────────────────────────────
+# ── User loader ───────────────────────────────────────────────
 @login_manager.user_loader
 def load_user(user_id):
     try:
@@ -46,36 +98,11 @@ def load_user(user_id):
         if user and getattr(user, 'is_banned', False):
             return None
         return user
-    except Exception:
-        try:
-            from sqlalchemy import text
-            with db.engine.connect() as conn:
-                new_cols = [
-                    ('email',           'VARCHAR(150)'),
-                    ('email_verified',  'BOOLEAN DEFAULT FALSE'),
-                    ('verify_token',    'VARCHAR(64)'),
-                    ('is_banned',       'BOOLEAN DEFAULT FALSE'),
-                    ('is_admin',        'BOOLEAN DEFAULT FALSE'),
-                    ('email_otp',       'VARCHAR(6)'),
-                    ('otp_expires_at',  'TIMESTAMP'),
-                    ('is_private',      'BOOLEAN DEFAULT FALSE'),
-                    ('saves_public',    'BOOLEAN DEFAULT TRUE'),
-                    ('avatar_url',      'VARCHAR(500)'),
-                    ('avatar_public_id','VARCHAR(255)'),
-                ]
-                for col, typ in new_cols:
-                    conn.execute(text(f'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS {col} {typ}'))
-                conn.commit()
-            db.session.expire_all()
-            user = db.session.get(User, int(user_id))
-            if user and getattr(user, 'is_banned', False):
-                return None
-            return user
-        except Exception as e:
-            print(f"load_user error: {e}")
-            return None
+    except Exception as e:
+        print(f"load_user error: {e}")
+        return None
 
-# ── Register blueprints ──────────────────────────────────────
+# ── Blueprints ────────────────────────────────────────────────
 from routes.auth     import auth
 from routes.feed     import feed
 from routes.profile  import profile
@@ -90,36 +117,6 @@ app.register_blueprint(messages)
 app.register_blueprint(support)
 app.register_blueprint(admin_bp)
 
-# ── Redirect /  ──────────────────────────────────────────────
-# The feed blueprint already handles "/" — nothing extra needed.
-
-# ── DB init & migration ──────────────────────────────────────
+# ── Run ───────────────────────────────────────────────────────
 if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
-        # Auto-migrate new columns
-        try:
-            from sqlalchemy import text, inspect
-            inspector = inspect(db.engine)
-            tables = inspector.get_table_names()
-            if 'user' in tables:
-                u_cols = [c['name'] for c in inspector.get_columns('user')]
-                with db.engine.connect() as conn:
-                    new_cols = [
-                        ('email_otp',       'VARCHAR(6)'),
-                        ('otp_expires_at',  'TIMESTAMP'),
-                        ('is_private',      'BOOLEAN DEFAULT FALSE'),
-                        ('saves_public',    'BOOLEAN DEFAULT TRUE'),
-                        ('avatar_url',      'VARCHAR(500)'),
-                        ('avatar_public_id','VARCHAR(255)'),
-                    ]
-                    for col, typ in new_cols:
-                        if col not in u_cols:
-                            conn.execute(text(f'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS {col} {typ}'))
-                            print(f"✅ Added user.{col}")
-                    conn.commit()
-        except Exception as e:
-            print(f"Migration note: {e}")
-        print("✅ DB ready")
-
     app.run(host="0.0.0.0", port=5000, debug=True)
